@@ -70,6 +70,22 @@ test.describe("客户结算 + 公开页", () => {
     await expect(page.getByText("$10.00").first()).toBeVisible();
     await expect(page.getByText("¥138.00").first()).toBeVisible();
 
+    // 收款记录「详情」可编辑：188 → 200，差额随之更新为 ¥150.00（200 − 实付50）
+    await page.locator("tr", { hasText: "¥188.00" }).getByRole("button", { name: "详情" }).click();
+    await expect(page.getByRole("heading", { name: "收款记录详情" })).toBeVisible();
+    const payModal = page.locator("div.fixed.inset-0");
+    await payModal.locator('input[type="number"]').first().fill("200");
+    await payModal.getByRole("button", { name: "保存" }).click();
+    await expect(page.getByText("¥150.00").first()).toBeVisible();
+
+    // 充值记录「详情」可编辑：实付 50 → 60，差额更新为 ¥140.00（200 − 60）
+    await page.locator("tr", { hasText: "$10.00" }).getByRole("button", { name: "详情" }).click();
+    await expect(page.getByRole("heading", { name: "充值记录详情" })).toBeVisible();
+    const rechModal = page.locator("div.fixed.inset-0");
+    await rechModal.locator('input[type="number"]').nth(1).fill("60");
+    await rechModal.getByRole("button", { name: "保存" }).click();
+    await expect(page.getByText("¥140.00").first()).toBeVisible();
+
     // 公开客户页显示合计标题
     await page.goto(`/view/${customerId}`);
     await expect(page.getByRole("heading", { name: "VPS 服务清单" })).toBeVisible();

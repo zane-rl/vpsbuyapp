@@ -153,11 +153,13 @@
 ## 管理 — 收款记录
 
 - `POST /api/admin/payments` — 新增 `{ customerId, amountCny, payDate?, note?, paymentProof? }`（payDate 省略取当前；paymentProof 为收款截图文件名）
+- `PATCH /api/admin/payments/{id}` — 编辑 `{ amountCny, payDate?, note?, paymentProof? }`（payDate 省略沿用原值；不存在返回 `404`）
 - `DELETE /api/admin/payments/{id}` — 删除收款记录
 
 ## 管理 — 客户充值（客户级共享余额）
 
 - `POST /api/admin/recharges` — 新增 `{ customerId, amountUsd, paidCny?, balanceAfter?, rechargeDate?, note?, paymentProof? }`（rechargeDate 省略取当前）。`amountUsd` 计入总成本、`paidCny` 计入总实付/结算；`balanceAfter` 为充值后服务商实际余额，客户当前共享余额取最近一条。
+- `PATCH /api/admin/recharges/{id}` — 编辑 `{ amountUsd, paidCny?, balanceAfter?, rechargeDate?, note?, paymentProof? }`（rechargeDate 省略沿用原值；不存在返回 `404`）
 - `DELETE /api/admin/recharges/{id}` — 删除充值记录
 
 ## 字段校验规则（`src/lib/validate.ts`）

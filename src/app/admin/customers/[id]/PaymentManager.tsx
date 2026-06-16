@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { money } from "@/lib/money";
 import ImageUpload from "../../ImageUpload";
+import Modal from "../../Modal";
 
 type Payment = { id: string; amountCny: number; payDate: string; note: string | null; paymentProof: string | null };
 
@@ -34,6 +35,24 @@ export default function PaymentManager({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // 详情 / 编辑
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const [eAmount, setEAmount] = useState("");
+  const [eDate, setEDate] = useState("");
+  const [eNote, setENote] = useState("");
+  const [eProof, setEProof] = useState("");
+  const [eError, setEError] = useState("");
+  const [eBusy, setEBusy] = useState(false);
+
+  function openEdit(p: Payment) {
+    setEditing(p);
+    setEAmount(String(p.amountCny));
+    setEDate(fmt(p.payDate));
+    setENote(p.note ?? "");
+    setEProof(p.paymentProof ?? "");
+    setEError("");
+  }
+
   async function add(e: React.FormEvent) {
     e.preventDefault();
     setError("");
@@ -56,11 +75,32 @@ export default function PaymentManager({
     }
   }
 
+  async function saveEdit() {
+    if (!editing) return;
+    setEError("");
+    setEBusy(true);
+    const res = await fetch(`/api/admin/payments/${editing.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amountCny: eAmount, payDate: eDate, note: eNote, paymentProof: eProof }),
+    });
+    setEBusy(false);
+    if (res.ok) {
+      setEditing(null);
+      router.refresh();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setEError(d.error || "保存失败");
+    }
+  }
+
   async function remove(id: string) {
     if (!confirm("确认删除该收款记录？")) return;
     const res = await fetch(`/api/admin/payments/${id}`, { method: "DELETE" });
-    if (res.ok) router.refresh();
-    else alert("删除失败");
+    if (res.ok) {
+      setEditing(null);
+      router.refresh();
+    } else alert("删除失败");
   }
 
   return (
@@ -98,7 +138,7 @@ export default function PaymentManager({
                 <th className="py-2 pr-4 text-right">金额 ¥</th>
                 <th className="py-2 pr-4">截图</th>
                 <th className="py-2 pr-4">备注</th>
-                <th className="py-2"></th>
+                <th className="py-2 text-right"></th>
               </tr>
             </thead>
             <tbody>
@@ -117,7 +157,10 @@ export default function PaymentManager({
                   </td>
                   <td className="py-2.5 pr-4 text-slate-400 dark:text-slate-500">{p.note || "-"}</td>
                   <td className="py-2.5 text-right">
-                    <button onClick={() => remove(p.id)} className="text-red-500 transition hover:text-red-600 dark:text-red-400">删除</button>
+                    <div className="flex justify-end gap-3">
+                      <button onClick={() => openEdit(p)} className="font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400">详情</button>
+                      <button onClick={() => remove(p.id)} className="text-red-500 transition hover:text-red-600 dark:text-red-400">删除</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -125,6 +168,34 @@ export default function PaymentManager({
           </table>
         </div>
       )}
+
+      <Modal open={!!editing} onClose={() => setEditing(null)} title="收款记录详情">
+        <div className="space-y-3">
+          <label className="block">
+            <span className="label">收款金额 (CNY) *</span>
+            <input type="number" step="0.01" min="0" className="input" value={eAmount} onChange={(e) => setEAmount(e.target.value)} placeholder="0.00" />
+          </label>
+          <label className="block">
+            <span className="label">收款时间</span>
+            <input type="date" className="input" value={eDate} onChange={(e) => setEDate(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="label">备注</span>
+            <input className="input" value={eNote} onChange={(e) => setENote(e.target.value)} placeholder="如：覆盖香港-01、日本-01" />
+          </label>
+          <ImageUpload label="收款截图" value={eProof} onChange={setEProof} />
+          {eError && <p className="text-sm text-red-600 dark:text-red-400">{eError}</p>}
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex gap-2">
+              <button onClick={saveEdit} disabled={eBusy} className="btn-primary px-4 py-2">保存</button>
+              <button onClick={() => setEditing(null)} className="btn-secondary">取消</button>
+            </div>
+            {editing && (
+              <button onClick={() => remove(editing.id)} disabled={eBusy} className="text-sm text-red-500 hover:text-red-600 dark:text-red-400">删除</button>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
