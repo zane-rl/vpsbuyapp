@@ -38,43 +38,19 @@ npm run dev                     # 默认 http://localhost:3000
 | `SESSION_SECRET` | 会话签名密钥，建议 `openssl rand -hex 32` |
 | `PORT` | 监听端口，默认 `3000`（`npm run start` 时生效） |
 
-> 说明：Prisma CLI 只读取根目录的 `.env`（仅需 `DATABASE_URL`）；应用运行时的密钥放 `.env.local`（开发）或 systemd / `.env.production`（生产）。
+> 说明：根目录 `.env` 同时被 Prisma CLI 与应用读取，生产环境把四个变量都放 `.env` 即可（最简单）。开发时也可用 `.env.local` 覆盖。
 
-## 部署到 Ubuntu 24.04
+## 部署到 Ubuntu（快速）
 
 ```bash
-# 1. 安装 Node 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# 2. 拉取代码到 /opt/vpsbuyapp 并安装依赖
-cd /opt/vpsbuyapp
-npm ci
-
-# 3. 配置环境变量（任选其一）
-#    a) 写入 systemd 单元的 Environment=（见 deploy/vpsbuyapp.service）
-#    b) 新建 .env.production 并在 service 里用 EnvironmentFile= 引用
-echo 'DATABASE_URL="file:./prod.db"' > .env       # 供 Prisma CLI 使用
-
-# 4. 迁移数据库并构建
-npx prisma migrate deploy
-npm run build
-
-# 5. 配置进程守护（systemd）
-sudo cp deploy/vpsbuyapp.service /etc/systemd/system/
-sudo nano /etc/systemd/system/vpsbuyapp.service   # 修改 PORT/密码/密钥/路径
-sudo systemctl daemon-reload
-sudo systemctl enable --now vpsbuyapp
-sudo systemctl status vpsbuyapp
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs git
+git clone https://github.com/zane-rl/vpsbuyapp.git && cd vpsbuyapp
+ADMIN_PASSWORD='你的强密码' bash deploy/bootstrap.sh        # 生成 .env → 装依赖 → 迁移 → 构建
+sudo npm i -g pm2 && pm2 start npm --name vpsbuyapp -- run start && pm2 save && pm2 startup
+sudo ufw allow 3000/tcp || true
+# 浏览器打开 http://<服务器IP>:3000/login
 ```
 
-服务将监听 `PORT` 指定端口（默认 3000）。如需对外用 80/443 + HTTPS，参考 `deploy/nginx.conf.example` 配置 Nginx 反向代理，并用 `certbot` 申请证书。
+完整步骤、systemd、Nginx+HTTPS、备份与排查见 **[docs/06-部署文档.md](docs/06-部署文档.md)**。
 
-### 数据备份
-
-数据全部存于 `DATABASE_URL` 指向的 SQLite 文件（如 `/opt/vpsbuyapp/prod.db`），定期复制该文件即可备份。
-
-## 修改密码 / 端口
-
-- 改密码：编辑 systemd 单元里的 `ADMIN_PASSWORD`，`systemctl restart vpsbuyapp`。
-- 改端口：编辑 `PORT`，重启服务（如有 Nginx 同步修改 `proxy_pass`）。
+> 关键顺序：`npm ci` 的 postinstall 会 `prisma generate`，依赖 `DATABASE_URL`，所以**先有 `.env` 再装依赖**（`bootstrap.sh` 已处理）。数据为 `prisma/prod.db` 与 `data/uploads/`，都需可写并备份。
