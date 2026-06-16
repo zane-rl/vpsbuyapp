@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { formatDate, vpsValidity } from "@/lib/dates";
 import { cycleLabel, money } from "@/lib/money";
+import { estimateSharedBalance } from "@/lib/billing";
+import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import ThemeToggle from "../../ThemeToggle";
 import CopyButton from "../../CopyButton";
 
@@ -28,9 +30,10 @@ export default async function CustomerPublicPage({ params }: { params: { custome
   const list = customer.vpsServers;
   const rechargeCostUsd = customer.recharges.reduce((s, r) => s + r.amountUsd, 0);
   const rechargePaidCny = customer.recharges.reduce((s, r) => s + r.paidCny, 0);
-  // 当前共享余额 = 最近一次充值后的实际余额；有自动续费 VPS 时展示
+  // 当前共享余额（估算）：最近一次充值余额 − 自动续费 VPS 按周期单价折算的累计消耗
   const hasAuto = list.some((v) => v.billingType === "auto");
-  const sharedBalanceUsd = customer.recharges[0]?.balanceAfter ?? 0;
+  const balanceEst = estimateSharedBalance({ recharges: customer.recharges, vpsServers: list, now: new Date() });
+  const sharedBalanceUsd = balanceEst.balanceUsd;
   // 合计：含续费与充值的成本与实付
   const totalCostUsd =
     list.reduce((s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0), 0) +
@@ -74,10 +77,11 @@ export default async function CustomerPublicPage({ params }: { params: { custome
           </div>
           {hasAuto && (
             <div className="card p-4">
-              <p className="text-xs text-slate-400 dark:text-slate-500">当前充值余额</p>
-              <p className="mt-1.5 text-2xl font-bold tracking-tight text-sky-600 dark:text-sky-400">
+              <p className="text-xs text-slate-400 dark:text-slate-500">当前充值余额（估算）</p>
+              <p className={`mt-1.5 text-2xl font-bold tracking-tight ${balanceEst.depleted ? "text-red-600 dark:text-red-400" : "text-sky-600 dark:text-sky-400"}`}>
                 ${money(sharedBalanceUsd)}<span className="ml-1 text-xs font-normal text-slate-400">USD</span>
               </p>
+              <BalanceEstimateLine est={balanceEst} className="mt-1" />
             </div>
           )}
         </section>
@@ -122,11 +126,16 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                       <dd className="font-medium text-slate-700 dark:text-slate-200">{formatDate(vps.purchaseDate)}</dd>
                     </div>
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                      <dt className="text-xs text-slate-400 dark:text-slate-500">{isAuto ? "续费方式" : "到期时间"}</dt>
+                      <dt className="text-xs text-slate-400 dark:text-slate-500">{isAuto ? "续费方式 / 预估到期" : "到期时间"}</dt>
                       <dd className="font-medium text-slate-700 dark:text-slate-200">
-                        {isAuto
-                          ? `按${cycleLabel(vps.autoCycle)}自动续费${vps.cyclePriceUsd != null ? ` · $${money(vps.cyclePriceUsd)}/${cycleLabel(vps.autoCycle)}` : ""}`
-                          : formatDate(vps.expiryDate)}
+                        {isAuto ? (
+                          <>
+                            <div>{`按${cycleLabel(vps.autoCycle)}自动续费${vps.cyclePriceUsd != null ? ` · $${money(vps.cyclePriceUsd)}/${cycleLabel(vps.autoCycle)}` : ""}`}</div>
+                            <BalanceEstimateLine est={balanceEst} className="mt-0.5 font-normal" />
+                          </>
+                        ) : (
+                          formatDate(vps.expiryDate)
+                        )}
                       </dd>
                     </div>
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">

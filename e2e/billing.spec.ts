@@ -59,7 +59,7 @@ test.describe("自动续费 + 客户共享充值", () => {
     // 详情页：自动续费中徽章 + 余额/充值区块（共享余额初始 $0.00）
     await expect(page.getByText("自动续费中").first()).toBeVisible();
     await expect(page.getByRole("heading", { name: /余额 \/ 充值/ })).toBeVisible();
-    await expect(page.getByText("所属客户共享余额（USD）")).toBeVisible();
+    await expect(page.getByText("所属客户共享余额", { exact: false })).toBeVisible();
 
     // 续费 API 对 auto 应拒绝
     const renewRes = await page.request.post(`/api/admin/vps/${vpsId}/renew`, { data: { newExpiry: ymd(30) } });
@@ -74,10 +74,12 @@ test.describe("自动续费 + 客户共享充值", () => {
     await rechargeForm.locator('input[type="number"]').nth(2).fill("25"); // 充值后余额 USD
     await page.getByRole("button", { name: "记一笔充值" }).click();
 
-    // 当前共享余额展示 $25.00；总成本计入 $10.00，总实付计入 ¥72.00
-    await expect(page.getByText("当前共享余额")).toBeVisible();
+    // 当前共享余额展示 $25.00（购买/充值均为今天，消耗≈0）；总成本计入 $10.00，总实付计入 ¥72.00
+    await expect(page.getByText("当前共享余额", { exact: false })).toBeVisible();
     await expect(page.getByText("$25.00").first()).toBeVisible();
     await expect(page.getByText("¥72.00").first()).toBeVisible();
+    // 按余额预估到期：hourly $0.02/h ≈ $0.48/天，余额 $25 → 约 52 天后耗尽
+    await expect(page.getByText(/预计可用至/).first()).toBeVisible();
 
     // 回到 VPS 详情，共享余额联动为 $25.00
     await page.goto(detailUrl);

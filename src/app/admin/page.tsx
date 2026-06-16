@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { estimateSharedBalance, type SharedBalanceEstimate } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function AdminDashboard() {
       include: {
         vpsServers: { include: { renewals: { select: { costUsd: true, paidCny: true } } } },
         payments: { select: { amountCny: true } },
-        recharges: { select: { amountUsd: true, paidCny: true } },
+        recharges: { select: { amountUsd: true, paidCny: true, balanceAfter: true, rechargeDate: true } },
       },
     }),
   ]);
@@ -47,6 +48,13 @@ export default async function AdminDashboard() {
     const receivedCny = c.payments.reduce((s, p) => s + p.amountCny, 0);
     return { id: c.id, name: c.name, vpsCount: c.vpsServers.length, costUsd, paidCny, receivedCny, diffCny: receivedCny - paidCny };
   });
+
+  // 按客户预计算共享余额/预估耗尽（auto VPS 共享同一耗尽日）
+  const now = new Date();
+  const balanceByCustomer = new Map<string, SharedBalanceEstimate>();
+  for (const c of customers) {
+    balanceByCustomer.set(c.id, estimateSharedBalance({ recharges: c.recharges, vpsServers: c.vpsServers, now }));
+  }
 
   const expiringCount = list.filter((v) => {
     const va = vpsValidity(v);
@@ -169,6 +177,8 @@ export default async function AdminDashboard() {
               <tbody>
                 {list.map((vps) => {
                   const va = vpsValidity(vps);
+                  const autoEst = va.kind === "auto" && vps.customerId ? balanceByCustomer.get(vps.customerId) : undefined;
+                  const autoDepletion = autoEst?.hasPricing && autoEst.hasRecharge ? autoEst : undefined;
                   return (
                     <tr key={vps.id} className="table-row even:bg-slate-50/60 dark:even:bg-slate-800/20">
                       <td className="px-5 py-3.5">
@@ -201,9 +211,26 @@ export default async function AdminDashboard() {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5 text-slate-500 dark:text-slate-400">{formatDate(vps.createdAt)}</td>
-                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600 dark:text-slate-300">{vps.expiryDate ? formatDate(vps.expiryDate) : <span className="text-slate-400">自动续费</span>}</td>
+                      <td className="whitespace-nowrap px-3 py-3.5 text-slate-600 dark:text-slate-300">
+                        {vps.expiryDate ? (
+                          formatDate(vps.expiryDate)
+                        ) : autoEst?.depleted ? (
+                          <span className="text-red-600 dark:text-red-400">已耗尽</span>
+                        ) : autoDepletion ? (
+                          <span title="按余额估算">{formatDate(autoDepletion.depletionDate)}</span>
+                        ) : (
+                          <span className="text-slate-400">自动续费</span>
+                        )}
+                      </td>
                       <td className="whitespace-nowrap px-3 py-3.5">
-                        <span className={`badge ${va.badgeClass}`}>{va.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`badge ${va.badgeClass}`}>{va.label}</span>
+                          {autoEst?.depleted ? (
+                            <span className="text-xs text-red-600 dark:text-red-400">余额已耗尽</span>
+                          ) : autoDepletion ? (
+                            <span className={`text-xs ${(autoDepletion.daysRemaining ?? 0) <= 7 ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"}`}>约 {autoDepletion.daysRemaining} 天</span>
+                          ) : null}
+                        </div>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">${money(vps.purchaseCostUsd)}</td>
                       <td className="whitespace-nowrap px-3 py-3.5 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(vps.purchasePaidCny)}</td>

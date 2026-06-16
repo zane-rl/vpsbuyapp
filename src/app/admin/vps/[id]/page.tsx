@@ -8,6 +8,8 @@ import RenewForm from "./RenewForm";
 import RenewalDeleteButton from "./RenewalDeleteButton";
 import NodeManager from "./NodeManager";
 import { cycleLabel, money } from "@/lib/money";
+import { estimateSharedBalance } from "@/lib/billing";
+import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,12 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
       where: { id: params.id },
       include: {
         provider: true,
-        customer: { include: { recharges: { orderBy: { rechargeDate: "desc" }, take: 1 } } },
+        customer: {
+          include: {
+            recharges: { orderBy: { rechargeDate: "desc" } },
+            vpsServers: { select: { billingType: true, autoCycle: true, cyclePriceUsd: true, purchaseDate: true } },
+          },
+        },
         renewals: { orderBy: { renewDate: "desc" } },
         vpnNodes: { orderBy: { createdAt: "asc" } },
       },
@@ -30,7 +37,12 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
 
   const validity = vpsValidity(vps);
   const isAuto = vps.billingType === "auto";
-  const sharedBalance = vps.customer?.recharges[0]?.balanceAfter ?? 0;
+  const balanceEst = estimateSharedBalance({
+    recharges: vps.customer?.recharges ?? [],
+    vpsServers: vps.customer?.vpsServers ?? [],
+    now: new Date(),
+  });
+  const sharedBalance = balanceEst.balanceUsd;
 
   return (
     <div className="animate-fade-in mx-auto max-w-3xl space-y-6">
@@ -60,10 +72,11 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
           <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">余额 / 充值</h2>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs text-slate-400 dark:text-slate-500">所属客户共享余额（USD）</p>
-              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              <p className="text-xs text-slate-400 dark:text-slate-500">所属客户共享余额（估算，USD）</p>
+              <p className={`mt-1 text-2xl font-bold tracking-tight ${balanceEst.depleted ? "text-red-600 dark:text-red-400" : "text-slate-900 dark:text-slate-100"}`}>
                 ${money(sharedBalance)}
               </p>
+              <BalanceEstimateLine est={balanceEst} className="mt-1" />
             </div>
             {vps.customer ? (
               <Link href={`/admin/customers/${vps.customer.id}`} className="btn-secondary shrink-0">
@@ -72,7 +85,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
             ) : null}
           </div>
           <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-            自动续费的余额由所属客户统一充值并共享，余额取该客户最近一次充值后的实际余额。
+            自动续费的余额由所属客户统一充值并共享；当前余额与预估到期按最近一次充值余额减去自动续费 VPS 周期单价的累计消耗估算。
           </p>
         </section>
       )}

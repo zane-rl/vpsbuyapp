@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { estimateSharedBalance } from "@/lib/billing";
+import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import PaymentManager from "./PaymentManager";
 import RechargeManager from "./RechargeManager";
 import ShareLink from "./ShareLink";
@@ -30,8 +32,13 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
 
   const rechargeCostUsd = customer.recharges.reduce((s, r) => s + r.amountUsd, 0);
   const rechargePaidCny = customer.recharges.reduce((s, r) => s + r.paidCny, 0);
-  // 当前共享余额 = 最近一次充值后的实际余额（recharges 已按 rechargeDate desc 排序）
-  const sharedBalanceUsd = customer.recharges[0]?.balanceAfter ?? 0;
+  // 当前共享余额（估算）：最近一次充值余额 − 名下自动续费 VPS 按周期单价折算的累计消耗
+  const balanceEst = estimateSharedBalance({
+    recharges: customer.recharges,
+    vpsServers: customer.vpsServers,
+    now: new Date(),
+  });
+  const sharedBalanceUsd = balanceEst.balanceUsd;
 
   const totalCostUsd =
     customer.vpsServers.reduce(
@@ -164,14 +171,17 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">充值记录</h2>
           <div className="text-right">
-            <span className="text-xs text-slate-400 dark:text-slate-500">当前共享余额</span>
-            <span className="ml-2 text-lg font-bold tracking-tight text-sky-600 dark:text-sky-400">
-              ${money(sharedBalanceUsd)}
-            </span>
+            <div>
+              <span className="text-xs text-slate-400 dark:text-slate-500">当前共享余额（估算）</span>
+              <span className={`ml-2 text-lg font-bold tracking-tight ${balanceEst.depleted ? "text-red-600 dark:text-red-400" : "text-sky-600 dark:text-sky-400"}`}>
+                ${money(sharedBalanceUsd)}
+              </span>
+            </div>
+            <BalanceEstimateLine est={balanceEst} className="mt-0.5" />
           </div>
         </div>
         <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
-          给客户自动续费 VPS 的预充值。充值美元计入总成本、实付人民币计入总实付；余额取最近一次充值后的实际余额。
+          给客户自动续费 VPS 的预充值。充值美元计入总成本、实付人民币计入总实付；当前余额按最近一次充值余额减去自动续费 VPS 周期单价的累计消耗估算。
         </p>
         <RechargeManager customerId={customer.id} recharges={recharges} />
       </section>
