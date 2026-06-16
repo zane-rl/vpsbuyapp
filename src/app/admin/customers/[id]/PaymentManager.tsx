@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { money } from "@/lib/money";
+import ImageUpload from "../../ImageUpload";
 
-type Payment = { id: string; amountCny: number; payDate: string; note: string | null };
+type Payment = { id: string; amountCny: number; payDate: string; note: string | null; paymentProof: string | null };
 
 function ymdToday(): string {
   const d = new Date();
@@ -29,6 +30,7 @@ export default function PaymentManager({
   const [amountCny, setAmount] = useState("");
   const [payDate, setPayDate] = useState(ymdToday());
   const [note, setNote] = useState("");
+  const [paymentProof, setPaymentProof] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -39,13 +41,14 @@ export default function PaymentManager({
     const res = await fetch("/api/admin/payments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customerId, amountCny, payDate, note }),
+      body: JSON.stringify({ customerId, amountCny, payDate, note, paymentProof }),
     });
     setBusy(false);
     if (res.ok) {
       setAmount("");
       setNote("");
       setPayDate(ymdToday());
+      setPaymentProof("");
       router.refresh();
     } else {
       const d = await res.json().catch(() => ({}));
@@ -77,6 +80,9 @@ export default function PaymentManager({
             <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="如：覆盖香港-01、日本-01" />
           </label>
         </div>
+        <div className="mt-2">
+          <ImageUpload label="收款截图" value={paymentProof} onChange={setPaymentProof} />
+        </div>
         {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button type="submit" disabled={busy} className="btn-success mt-2 px-4 py-2">记一笔收款</button>
       </form>
@@ -90,6 +96,7 @@ export default function PaymentManager({
               <tr className="table-head">
                 <th className="py-2 pr-4">收款时间</th>
                 <th className="py-2 pr-4 text-right">金额 ¥</th>
+                <th className="py-2 pr-4">截图</th>
                 <th className="py-2 pr-4">备注</th>
                 <th className="py-2"></th>
               </tr>
@@ -99,6 +106,15 @@ export default function PaymentManager({
                 <tr key={p.id} className="table-row">
                   <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-300">{fmt(p.payDate)}</td>
                   <td className="py-2.5 pr-4 text-right tabular-nums text-slate-700 dark:text-slate-200">¥{money(p.amountCny)}</td>
+                  <td className="py-2.5 pr-4">
+                    {p.paymentProof ? (
+                      <a href={`/api/files/${p.paymentProof}`} target="_blank" rel="noreferrer">
+                        <img src={`/api/files/${p.paymentProof}`} alt="收款截图" className="h-8 w-8 rounded border border-slate-200 object-cover dark:border-slate-700" />
+                      </a>
+                    ) : (
+                      <span className="text-slate-300 dark:text-slate-600">—</span>
+                    )}
+                  </td>
                   <td className="py-2.5 pr-4 text-slate-400 dark:text-slate-500">{p.note || "-"}</td>
                   <td className="py-2.5 text-right">
                     <button onClick={() => remove(p.id)} className="text-red-500 transition hover:text-red-600 dark:text-red-400">删除</button>

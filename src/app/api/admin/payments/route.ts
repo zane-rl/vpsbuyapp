@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       customerId,
       amountCny: num(body.amountCny),
       payDate: parseDate(body.payDate) ?? new Date(),
+      paymentProof: optStr(body.paymentProof),
       note: optStr(body.note),
     },
   });

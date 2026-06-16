@@ -17,6 +17,14 @@ export function num(v: unknown): number {
   return n;
 }
 
+/** 可空非负数：空/非法/负数归一为 null（区别于 num 的默认 0） */
+export function optNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  if (!isFinite(n) || n < 0) return null;
+  return n;
+}
+
 /** 可空整数（端口等） */
 export function optInt(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null;

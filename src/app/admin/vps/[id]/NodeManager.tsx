@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import CopyButton from "../../../CopyButton";
 
 type Node = {
   id: string;
@@ -10,6 +11,7 @@ type Node = {
   address: string | null;
   port: number | null;
   config: string | null;
+  subscribeUrl: string | null;
   enabled: boolean;
 };
 
@@ -61,6 +63,7 @@ function NodeRow({ node, onChanged }: { node: Node; onChanged: () => void }) {
           <input className={inputCls} type="number" value={form.port ?? ""} onChange={(e) => setForm({ ...form, port: e.target.value === "" ? null : Number(e.target.value) })} placeholder="端口" />
         </div>
         <input className={`${inputCls} mt-2`} value={form.config ?? ""} onChange={(e) => setForm({ ...form, config: e.target.value })} placeholder="加密方式/密码/其他配置" />
+        <input className={`${inputCls} mt-2`} value={form.subscribeUrl ?? ""} onChange={(e) => setForm({ ...form, subscribeUrl: e.target.value })} placeholder="订阅链接" />
         <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="accent-indigo-600" />
           启用（公开页展示）
@@ -81,6 +84,7 @@ function NodeRow({ node, onChanged }: { node: Node; onChanged: () => void }) {
         {node.address && (
           <span className="text-slate-400 dark:text-slate-500">{node.address}{node.port ? `:${node.port}` : ""}</span>
         )}
+        {node.subscribeUrl && <CopyButton text={node.subscribeUrl} />}
         {!node.enabled && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-400 dark:bg-slate-800 dark:text-slate-500">已禁用</span>}
       </div>
       <div className="flex gap-3 text-sm">
@@ -94,7 +98,7 @@ function NodeRow({ node, onChanged }: { node: Node; onChanged: () => void }) {
 export default function NodeManager({ vpsId, nodes }: { vpsId: string; nodes: Node[] }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: "", protocol: "Shadowsocks", address: "", port: "", config: "", enabled: true });
+  const [form, setForm] = useState({ name: "", protocol: "Shadowsocks", address: "", port: "", config: "", subscribeUrl: "", enabled: true });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -113,7 +117,7 @@ export default function NodeManager({ vpsId, nodes }: { vpsId: string; nodes: No
     });
     setBusy(false);
     if (res.ok) {
-      setForm({ name: "", protocol: "Shadowsocks", address: "", port: "", config: "", enabled: true });
+      setForm({ name: "", protocol: "Shadowsocks", address: "", port: "", config: "", subscribeUrl: "", enabled: true });
       setAdding(false);
       refresh();
     } else {
@@ -144,6 +148,7 @@ export default function NodeManager({ vpsId, nodes }: { vpsId: string; nodes: No
             <input className={inputCls} type="number" value={form.port} onChange={(e) => setForm({ ...form, port: e.target.value })} placeholder="端口" />
           </div>
           <input className={`${inputCls} mt-2`} value={form.config} onChange={(e) => setForm({ ...form, config: e.target.value })} placeholder="加密方式/密码/其他配置" />
+          <input className={`${inputCls} mt-2`} value={form.subscribeUrl} onChange={(e) => setForm({ ...form, subscribeUrl: e.target.value })} placeholder="订阅链接（可选）" />
           {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-2 flex gap-2">
             <button type="submit" disabled={busy} className="btn-primary px-3 py-1.5">添加</button>

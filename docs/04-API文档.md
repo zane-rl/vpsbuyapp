@@ -64,6 +64,20 @@
 ```
 `paymentProof` 为 `POST /api/admin/upload` 返回的文件名（可选）。响应：`201` 新建对象。缺必填或日期非法返回 `400`。`PATCH /api/admin/vps/{id}` 请求体同此。续费 `POST /api/admin/vps/{id}/renew` 同理已移除 `clientPaymentCny`、可带 `paymentProof`。
 
+**计费类型字段**：`billingType`(`term`默认 / `auto`)。
+- `term`：`expiryDate` 必填（按上例）。
+- `auto`：忽略 `expiryDate`（存 null）；可带 `autoCycle`(`hourly`/`monthly`默认/`yearly`)、`cyclePriceUsd`(周期费用)、`balanceAmount`(USD)。
+
+**节点字段**：`subscribeUrl`（订阅链接，可选）。
+
+### POST `/api/admin/vps/{id}/renew` — 续费（仅 term）
+对 `auto` 类型返回 `400「自动续费类型无固定到期，请使用更新余额/充值」`。
+
+### POST `/api/admin/vps/{id}/balance` — 更新余额/充值（仅 auto）
+请求体 `{ topupUsd?, paidCny?, balanceAfter, logDate?, paymentProof?, note? }`（余额账户按 USD，另记当时实付 CNY）。事务：新增 `VpsBalanceLog` + 更新 VPS 当前余额。对 `term` 返回 `400`。其中 `paidCny` 计入总实付成本/客户结算。
+### DELETE `/api/admin/balance-logs/{id}` — 删除余额/充值记录
+仅删历史，不改当前余额。
+
 ### GET `/api/admin/vps/{id}` — 详情
 含 `renewals`（按续费时间倒序）与 `vpnNodes`（按创建时间正序）。不存在返回 `404`。
 
@@ -143,7 +157,7 @@
 
 ## 管理 — 收款记录
 
-- `POST /api/admin/payments` — 新增 `{ customerId, amountCny, payDate?, note? }`（payDate 省略取当前）
+- `POST /api/admin/payments` — 新增 `{ customerId, amountCny, payDate?, note?, paymentProof? }`（payDate 省略取当前；paymentProof 为收款截图文件名）
 - `DELETE /api/admin/payments/{id}` — 删除收款记录
 
 ## 字段校验规则（`src/lib/validate.ts`）

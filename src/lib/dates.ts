@@ -84,3 +84,55 @@ export function parseDateInput(value: string): Date {
   const [y, m, d] = value.split("-").map(Number);
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
+
+// ——— 计费类型统一判定（固定期限 / 自动续费）———
+
+export type Validity =
+  | {
+      kind: "auto";
+      label: string;
+      badgeClass: string;
+      dotClass: string;
+      textClass: string;
+    }
+  | {
+      kind: "term";
+      status: ExpiryStatus;
+      days: number;
+      label: string;
+      badgeClass: string;
+      dotClass: string;
+      textClass: string;
+    };
+
+/** 自动续费徽章配色（蓝色系，区别于到期状态的绿/黄/红） */
+const AUTO_BADGE = "bg-sky-50 text-sky-600 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/60";
+const AUTO_DOT = "bg-sky-500";
+const AUTO_TEXT = "text-sky-600 dark:text-sky-400";
+
+/** 根据计费类型统一返回展示信息：auto→「自动续费中」，term→到期状态 */
+export function vpsValidity(v: {
+  billingType?: string | null;
+  expiryDate: Date | string | null | undefined;
+}): Validity {
+  if (v.billingType === "auto" || !v.expiryDate) {
+    return {
+      kind: "auto",
+      label: "自动续费中",
+      badgeClass: AUTO_BADGE,
+      dotClass: AUTO_DOT,
+      textClass: AUTO_TEXT,
+    };
+  }
+  const days = daysUntil(v.expiryDate);
+  const status = expiryStatus(v.expiryDate);
+  return {
+    kind: "term",
+    status,
+    days,
+    label: statusLabel(status, days),
+    badgeClass: statusBadgeClass(status),
+    dotClass: statusDotClass(status),
+    textClass: statusTextClass(status),
+  };
+}

@@ -11,6 +11,10 @@ const empty: VpsFormData = {
   name: "",
   customerId: "",
   providerId: "",
+  billingType: "term",
+  autoCycle: "monthly",
+  cyclePriceUsd: "",
+  balanceAmount: "",
   cpu: "",
   ram: "",
   disk: "",
@@ -160,19 +164,71 @@ export default function VpsForm({
         </Field>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="购买时间 *">
-          <input type="date" className={inputCls} value={form.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} />
-        </Field>
-        <Field label="到期时间 *">
-          <input type="date" className={inputCls} value={form.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} />
-        </Field>
-        <Field label="运行状态">
-          <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
-            <option value="active">运行中</option>
-            <option value="stopped">已停用</option>
-          </select>
-        </Field>
+      {/* 计费类型 */}
+      <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+        <span className="label">计费类型</span>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => set("billingType", "term")}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm transition ${
+              form.billingType === "term"
+                ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-300"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            固定期限（按月/季/年，有到期时间）
+          </button>
+          <button
+            type="button"
+            onClick={() => set("billingType", "auto")}
+            className={`flex-1 rounded-lg border px-3 py-2 text-sm transition ${
+              form.billingType === "auto"
+                ? "border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-500 dark:bg-sky-950/40 dark:text-sky-300"
+                : "border-slate-300 text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            }`}
+          >
+            自动续费（按余额扣费，无固定到期）
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <Field label="购买时间 *">
+            <input type="date" className={inputCls} value={form.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} />
+          </Field>
+
+          {form.billingType === "term" ? (
+            <Field label="到期时间 *">
+              <input type="date" className={inputCls} value={form.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} />
+            </Field>
+          ) : (
+            <Field label="续费周期">
+              <select className={inputCls} value={form.autoCycle} onChange={(e) => set("autoCycle", e.target.value)}>
+                <option value="hourly">按小时</option>
+                <option value="monthly">按月</option>
+                <option value="yearly">按年</option>
+              </select>
+            </Field>
+          )}
+
+          <Field label="运行状态">
+            <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
+              <option value="active">运行中</option>
+              <option value="stopped">已停用</option>
+            </select>
+          </Field>
+        </div>
+
+        {form.billingType === "auto" && (
+          <div className="mt-4 grid gap-4 sm:grid-cols-3">
+            <Field label="周期费用 (USD)">
+              <input type="number" step="0.001" min="0" className={inputCls} value={form.cyclePriceUsd} onChange={(e) => set("cyclePriceUsd", e.target.value)} placeholder="每周期单价，可选" />
+            </Field>
+            <Field label="账户余额 (USD)">
+              <input type="number" step="0.01" min="0" className={inputCls} value={form.balanceAmount} onChange={(e) => set("balanceAmount", e.target.value)} placeholder="可选" />
+            </Field>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

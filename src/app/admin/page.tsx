@@ -1,21 +1,14 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import {
-  daysUntil,
-  expiryStatus,
-  formatDate,
-  statusBadgeClass,
-  statusDotClass,
-  statusLabel,
-} from "@/lib/dates";
+import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const [list, vpsAgg, renewAgg, payAgg] = await Promise.all([
+  const [list, vpsAgg, renewAgg, payAgg, balAgg] = await Promise.all([
     prisma.vpsServer.findMany({
-      orderBy: { expiryDate: "asc" },
+      orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       include: {
         provider: true,
         customer: true,
@@ -25,14 +18,18 @@ export default async function AdminDashboard() {
     prisma.vpsServer.aggregate({ _sum: { purchaseCostUsd: true, purchasePaidCny: true } }),
     prisma.vpsRenewal.aggregate({ _sum: { costUsd: true, paidCny: true } }),
     prisma.customerPayment.aggregate({ _sum: { amountCny: true } }),
+    prisma.vpsBalanceLog.aggregate({ _sum: { topupUsd: true, paidCny: true } }),
   ]);
 
-  const totalCostUsd = (vpsAgg._sum.purchaseCostUsd ?? 0) + (renewAgg._sum.costUsd ?? 0);
-  const totalPaidCny = (vpsAgg._sum.purchasePaidCny ?? 0) + (renewAgg._sum.paidCny ?? 0);
+  const totalCostUsd = (vpsAgg._sum.purchaseCostUsd ?? 0) + (renewAgg._sum.costUsd ?? 0) + (balAgg._sum.topupUsd ?? 0);
+  const totalPaidCny = (vpsAgg._sum.purchasePaidCny ?? 0) + (renewAgg._sum.paidCny ?? 0) + (balAgg._sum.paidCny ?? 0);
   const totalReceivedCny = payAgg._sum.amountCny ?? 0;
   const diffCny = totalReceivedCny - totalPaidCny;
 
-  const expiringCount = list.filter((v) => expiryStatus(v.expiryDate) !== "valid").length;
+  const expiringCount = list.filter((v) => {
+    const va = vpsValidity(v);
+    return va.kind === "term" && va.status !== "valid";
+  }).length;
 
   const cards = [
     { label: "总成本", value: `$${money(totalCostUsd)}`, hint: "USD", accent: "text-slate-900 dark:text-slate-100" },
@@ -92,23 +89,24 @@ export default async function AdminDashboard() {
                 <tr className="table-head">
                   <th className="px-5 py-2.5">名称 / 提供商</th>
                   <th className="px-3 py-2.5">客户</th>
+                  <th className="px-3 py-2.5">IP</th>
                   <th className="px-3 py-2.5">到期时间</th>
-                  <th className="px-3 py-2.5">剩余</th>
+                  <th className="px-3 py-2.5">剩余 / 状态</th>
                   <th className="px-3 py-2.5 text-right">成本 $</th>
                   <th className="px-3 py-2.5 text-right">实付 ¥</th>
                   <th className="px-3 py-2.5 text-center">节点</th>
+                  <th className="px-3 py-2.5">创建时间</th>
                   <th className="px-5 py-2.5"></th>
                 </tr>
               </thead>
               <tbody>
                 {list.map((vps) => {
-                  const days = daysUntil(vps.expiryDate);
-                  const status = expiryStatus(vps.expiryDate);
+                  const va = vpsValidity(vps);
                   return (
                     <tr key={vps.id} className="table-row even:bg-slate-50/60 dark:even:bg-slate-800/20">
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-2.5">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${statusDotClass(status)}`} />
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${va.dotClass}`} />
                           <div>
                             <div className="font-medium text-slate-800 dark:text-slate-100">{vps.name}</div>
                             <div className="text-xs text-slate-400 dark:text-slate-500">
@@ -127,13 +125,15 @@ export default async function AdminDashboard() {
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{formatDate(vps.expiryDate)}</td>
+                      <td className="px-3 py-3 tabular-nums text-slate-600 dark:text-slate-300">{vps.ipAddress || <span className="text-slate-400">—</span>}</td>
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{vps.expiryDate ? formatDate(vps.expiryDate) : <span className="text-slate-400">自动续费</span>}</td>
                       <td className="px-3 py-3">
-                        <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status, days)}</span>
+                        <span className={`badge ${va.badgeClass}`}>{va.label}</span>
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">${money(vps.purchaseCostUsd)}</td>
                       <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(vps.purchasePaidCny)}</td>
                       <td className="px-3 py-3 text-center text-slate-500">{vps._count.vpnNodes}</td>
+                      <td className="px-3 py-3 text-slate-500 dark:text-slate-400">{formatDate(vps.createdAt)}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-3">
                           <Link href={`/admin/vps/new?from=${vps.id}`} className="text-slate-400 transition hover:text-indigo-600 dark:hover:text-indigo-400" title="基于此 VPS 复制新增">

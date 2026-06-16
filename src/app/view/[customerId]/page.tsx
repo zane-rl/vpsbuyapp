@@ -1,15 +1,9 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import {
-  daysUntil,
-  expiryStatus,
-  formatDate,
-  statusBadgeClass,
-  statusDotClass,
-  statusLabel,
-} from "@/lib/dates";
-import { money } from "@/lib/money";
+import { formatDate, vpsValidity } from "@/lib/dates";
+import { cycleLabel, money } from "@/lib/money";
 import ThemeToggle from "../../ThemeToggle";
+import CopyButton from "../../CopyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +16,9 @@ export default async function CustomerPublicPage({ params }: { params: { custome
           provider: true,
           vpnNodes: { where: { enabled: true }, orderBy: { createdAt: "asc" } },
           renewals: { select: { costUsd: true, paidCny: true } },
+          balanceLogs: { select: { topupUsd: true, paidCny: true } },
         },
-        orderBy: { expiryDate: "asc" },
+        orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
     },
   });
@@ -31,13 +26,23 @@ export default async function CustomerPublicPage({ params }: { params: { custome
   if (!customer) notFound();
 
   const list = customer.vpsServers;
-  // 合计：含续费的成本与实付
-  const totalCostUsd =
-    list.reduce((s, v) => s + v.purchaseCostUsd, 0) +
-    list.reduce((s, v) => s + v.renewals.reduce((rs, r) => rs + r.costUsd, 0), 0);
-  const totalPaidCny =
-    list.reduce((s, v) => s + v.purchasePaidCny, 0) +
-    list.reduce((s, v) => s + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0);
+  // 合计：含续费与充值的成本与实付
+  const totalCostUsd = list.reduce(
+    (s, v) =>
+      s +
+      v.purchaseCostUsd +
+      v.renewals.reduce((rs, r) => rs + r.costUsd, 0) +
+      v.balanceLogs.reduce((bs, b) => bs + b.topupUsd, 0),
+    0
+  );
+  const totalPaidCny = list.reduce(
+    (s, v) =>
+      s +
+      v.purchasePaidCny +
+      v.renewals.reduce((rs, r) => rs + r.paidCny, 0) +
+      v.balanceLogs.reduce((bs, b) => bs + b.paidCny, 0),
+    0
+  );
 
   return (
     <main className="app-bg min-h-screen">
@@ -79,14 +84,14 @@ export default async function CustomerPublicPage({ params }: { params: { custome
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {list.map((vps) => {
-              const days = daysUntil(vps.expiryDate);
-              const status = expiryStatus(vps.expiryDate);
+              const va = vpsValidity(vps);
+              const isAuto = vps.billingType === "auto";
               const specs = [vps.cpu, vps.ram, vps.disk].filter(Boolean).join(" · ");
               return (
                 <article key={vps.id} className="card card-hover animate-fade-in p-5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-2.5">
-                      <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${statusDotClass(status)}`} />
+                      <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${va.dotClass}`} />
                       <div>
                         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{vps.name}</h2>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -95,7 +100,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                         </p>
                       </div>
                     </div>
-                    <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status, days)}</span>
+                    <span className={`badge ${va.badgeClass}`}>{va.label}</span>
                   </div>
 
                   {(specs || vps.bandwidth) && (
@@ -114,8 +119,12 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                       <dd className="font-medium text-slate-700 dark:text-slate-200">{formatDate(vps.purchaseDate)}</dd>
                     </div>
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                      <dt className="text-xs text-slate-400 dark:text-slate-500">到期时间</dt>
-                      <dd className="font-medium text-slate-700 dark:text-slate-200">{formatDate(vps.expiryDate)}</dd>
+                      <dt className="text-xs text-slate-400 dark:text-slate-500">{isAuto ? "续费方式" : "到期时间"}</dt>
+                      <dd className="font-medium text-slate-700 dark:text-slate-200">
+                        {isAuto
+                          ? `按${cycleLabel(vps.autoCycle)}自动续费${vps.cyclePriceUsd != null ? ` · $${money(vps.cyclePriceUsd)}/${cycleLabel(vps.autoCycle)}` : ""}`
+                          : formatDate(vps.expiryDate)}
+                      </dd>
                     </div>
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
                       <dt className="text-xs text-slate-400 dark:text-slate-500">购买成本</dt>
@@ -147,7 +156,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                       </p>
                       <ul className="space-y-1.5">
                         {vps.vpnNodes.map((n) => (
-                          <li key={n.id} className="flex items-center gap-2 text-sm">
+                          <li key={n.id} className="flex flex-wrap items-center gap-2 text-sm">
                             <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs font-medium text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
                               {n.protocol}
                             </span>
@@ -157,6 +166,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                                 {n.address}{n.port ? `:${n.port}` : ""}
                               </span>
                             )}
+                            {n.subscribeUrl && <CopyButton text={n.subscribeUrl} />}
                           </li>
                         ))}
                       </ul>

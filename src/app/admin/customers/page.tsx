@@ -9,15 +9,25 @@ export default async function CustomersPage() {
   const customers = await prisma.customer.findMany({
     orderBy: { name: "asc" },
     include: {
-      vpsServers: { include: { renewals: { select: { paidCny: true } } } },
+      vpsServers: {
+        include: {
+          renewals: { select: { paidCny: true } },
+          balanceLogs: { select: { paidCny: true } },
+        },
+      },
       payments: { select: { amountCny: true } },
     },
   });
 
   const rows = customers.map((c) => {
-    const paid =
-      c.vpsServers.reduce((s, v) => s + v.purchasePaidCny, 0) +
-      c.vpsServers.reduce((s, v) => s + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0);
+    const paid = c.vpsServers.reduce(
+      (s, v) =>
+        s +
+        v.purchasePaidCny +
+        v.renewals.reduce((rs, r) => rs + r.paidCny, 0) +
+        v.balanceLogs.reduce((bs, b) => bs + b.paidCny, 0),
+      0
+    );
     const received = c.payments.reduce((s, p) => s + p.amountCny, 0);
     return { ...c, vpsCount: c.vpsServers.length, paid, received, diff: received - paid };
   });

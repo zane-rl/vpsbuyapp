@@ -5,6 +5,10 @@ export type VpsFormData = {
   name: string;
   customerId: string;
   providerId: string;
+  billingType: string; // "term" | "auto"
+  autoCycle: string; // "hourly" | "monthly" | "yearly"（auto 时）
+  cyclePriceUsd: string; // auto 周期费用（USD）
+  balanceAmount: string; // auto 余额（USD）
   cpu: string;
   ram: string;
   disk: string;
@@ -13,7 +17,7 @@ export type VpsFormData = {
   ipAddress: string;
   os: string;
   purchaseDate: string; // YYYY-MM-DD
-  expiryDate: string;
+  expiryDate: string; // term 必填，auto 为空
   purchaseCostUsd: string;
   purchasePaidCny: string;
   paymentProof: string;
@@ -28,6 +32,10 @@ export function toFormData(v: any): VpsFormData {
     name: v.name ?? "",
     customerId: v.customerId ?? "",
     providerId: v.providerId ?? "",
+    billingType: v.billingType ?? "term",
+    autoCycle: v.autoCycle ?? "monthly",
+    cyclePriceUsd: v.cyclePriceUsd == null ? "" : String(v.cyclePriceUsd),
+    balanceAmount: v.balanceAmount == null ? "" : String(v.balanceAmount),
     cpu: v.cpu ?? "",
     ram: v.ram ?? "",
     disk: v.disk ?? "",
@@ -35,8 +43,8 @@ export function toFormData(v: any): VpsFormData {
     region: v.region ?? "",
     ipAddress: v.ipAddress ?? "",
     os: v.os ?? "",
-    purchaseDate: formatDate(v.purchaseDate),
-    expiryDate: formatDate(v.expiryDate),
+    purchaseDate: v.purchaseDate ? formatDate(v.purchaseDate) : "",
+    expiryDate: v.expiryDate ? formatDate(v.expiryDate) : "",
     purchaseCostUsd: String(v.purchaseCostUsd ?? 0),
     purchasePaidCny: String(v.purchasePaidCny ?? 0),
     paymentProof: v.paymentProof ?? "",

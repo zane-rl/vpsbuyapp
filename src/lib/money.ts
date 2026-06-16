@@ -13,3 +13,8 @@ export function cny(n: number | null | undefined): string {
 export function usd(n: number | null | undefined): string {
   return `$${money(n)}`;
 }
+
+/** 自动续费周期中文 */
+export function cycleLabel(c: string | null | undefined): string {
+  return c === "hourly" ? "小时" : c === "yearly" ? "年" : "月";
+}

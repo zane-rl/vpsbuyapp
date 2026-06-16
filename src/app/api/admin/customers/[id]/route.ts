@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const customer = await prisma.customer.findUnique({
     where: { id: params.id },
     include: {
-      vpsServers: { include: { provider: true, renewals: true }, orderBy: { expiryDate: "asc" } },
+      vpsServers: { include: { provider: true, renewals: true }, orderBy: { expiryDate: { sort: "asc", nulls: "last" } } },
       payments: { orderBy: { payDate: "desc" } },
     },
   });

@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       address: optStr(body.address) ?? vps.ipAddress,
       port: optInt(body.port),
       config: optStr(body.config),
+      subscribeUrl: optStr(body.subscribeUrl),
       enabled: body.enabled === false ? false : true,
     },
   });

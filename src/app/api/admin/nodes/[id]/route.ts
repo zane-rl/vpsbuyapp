@@ -29,6 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       address: optStr(body.address),
       port: optInt(body.port),
       config: optStr(body.config),
+      subscribeUrl: optStr(body.subscribeUrl),
       enabled: body.enabled === false ? false : true,
     },
   });

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { daysUntil, expiryStatus, formatDate, statusBadgeClass, statusLabel } from "@/lib/dates";
+import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
 import PaymentManager from "./PaymentManager";
 import ShareLink from "./ShareLink";
@@ -14,8 +14,12 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
     where: { id: params.id },
     include: {
       vpsServers: {
-        include: { provider: true, renewals: { select: { costUsd: true, paidCny: true } } },
-        orderBy: { expiryDate: "asc" },
+        include: {
+          provider: true,
+          renewals: { select: { costUsd: true, paidCny: true } },
+          balanceLogs: { select: { topupUsd: true, paidCny: true } },
+        },
+        orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
       payments: { orderBy: { payDate: "desc" } },
     },
@@ -23,12 +27,22 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
 
   if (!customer) notFound();
 
-  const totalCostUsd =
-    customer.vpsServers.reduce((s, v) => s + v.purchaseCostUsd, 0) +
-    customer.vpsServers.reduce((s, v) => s + v.renewals.reduce((rs, r) => rs + r.costUsd, 0), 0);
-  const totalPaidCny =
-    customer.vpsServers.reduce((s, v) => s + v.purchasePaidCny, 0) +
-    customer.vpsServers.reduce((s, v) => s + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0);
+  const totalCostUsd = customer.vpsServers.reduce(
+    (s, v) =>
+      s +
+      v.purchaseCostUsd +
+      v.renewals.reduce((rs, r) => rs + r.costUsd, 0) +
+      v.balanceLogs.reduce((bs, b) => bs + b.topupUsd, 0),
+    0
+  );
+  const totalPaidCny = customer.vpsServers.reduce(
+    (s, v) =>
+      s +
+      v.purchasePaidCny +
+      v.renewals.reduce((rs, r) => rs + r.paidCny, 0) +
+      v.balanceLogs.reduce((bs, b) => bs + b.paidCny, 0),
+    0
+  );
   const totalReceivedCny = customer.payments.reduce((s, p) => s + p.amountCny, 0);
   const diffCny = totalReceivedCny - totalPaidCny;
 
@@ -37,6 +51,7 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
     amountCny: p.amountCny,
     payDate: p.payDate.toISOString(),
     note: p.note,
+    paymentProof: p.paymentProof,
   }));
 
   const cards = [
@@ -109,16 +124,16 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
               </thead>
               <tbody>
                 {customer.vpsServers.map((v) => {
-                  const status = expiryStatus(v.expiryDate);
+                  const va = vpsValidity(v);
                   return (
                     <tr key={v.id} className="table-row even:bg-slate-50/60 dark:even:bg-slate-800/20">
                       <td className="px-5 py-3">
                         <div className="font-medium text-slate-800 dark:text-slate-100">{v.name}</div>
                         <div className="text-xs text-slate-400 dark:text-slate-500">{v.provider?.name ?? "未指定"}</div>
                       </td>
-                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{formatDate(v.expiryDate)}</td>
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300">{v.expiryDate ? formatDate(v.expiryDate) : <span className="text-slate-400">自动续费</span>}</td>
                       <td className="px-3 py-3">
-                        <span className={`badge ${statusBadgeClass(status)}`}>{statusLabel(status, daysUntil(v.expiryDate))}</span>
+                        <span className={`badge ${va.badgeClass}`}>{va.label}</span>
                       </td>
                       <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">${money(v.purchaseCostUsd)}</td>
                       <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(v.purchasePaidCny)}</td>

@@ -50,8 +50,8 @@ async function main() {
       notes: "搭建 SS + V2Ray",
       vpnNodes: {
         create: [
-          { name: "HK-SS-01", protocol: "Shadowsocks", address: "203.0.113.10", port: 8388, config: "加密: aes-256-gcm" },
-          { name: "HK-V2Ray-01", protocol: "V2Ray", address: "hk1.example.com", port: 443, config: "ws + tls, path: /ray" },
+          { name: "HK-SS-01", protocol: "Shadowsocks", address: "203.0.113.10", port: 8388, config: "加密: aes-256-gcm", subscribeUrl: "https://sub.example.com/s/hk-ss-01" },
+          { name: "HK-V2Ray-01", protocol: "V2Ray", address: "hk1.example.com", port: 443, config: "ws + tls, path: /ray", subscribeUrl: "https://sub.example.com/s/hk-v2ray-01" },
         ],
       },
     },
@@ -125,6 +125,38 @@ async function main() {
 
   await prisma.customerPayment.create({
     data: { customerId: customerB.id, amountCny: 70, payDate: daysFromNow(-390), note: "首次付款" },
+  });
+
+  // 客户A：一台自动续费 VPS（按小时扣费，无固定到期）
+  await prisma.vpsServer.create({
+    data: {
+      name: "新加坡-按量-01",
+      customerId: customerA.id,
+      providerId: vultr.id,
+      billingType: "auto",
+      autoCycle: "hourly",
+      cyclePriceUsd: 0.018,
+      balanceAmount: 12.5,
+      cpu: "1 vCPU",
+      ram: "1 GB",
+      disk: "25 GB SSD",
+      bandwidth: "按量计费",
+      region: "新加坡",
+      ipAddress: "203.0.113.40",
+      os: "Ubuntu 24.04",
+      purchaseDate: daysFromNow(-15),
+      expiryDate: null,
+      purchaseCostUsd: 10,
+      purchasePaidCny: 72,
+      status: "active",
+      notes: "按小时自动续费，余额不足会停机",
+      balanceLogs: {
+        create: [
+          { logDate: daysFromNow(-15), topupUsd: 10, paidCny: 72, balanceAfter: 10, note: "首次充值" },
+          { logDate: daysFromNow(-2), topupUsd: 5, paidCny: 36, balanceAfter: 12.5, note: "补充余额" },
+        ],
+      },
+    },
   });
 
   console.log("✅ 种子数据已写入");

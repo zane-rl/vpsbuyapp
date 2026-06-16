@@ -32,10 +32,11 @@ model CustomerPayment {
   id         String   @id @default(cuid())
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   customerId String
-  amountCny  Float    @default(0) // 本次收款金额（CNY）
-  payDate    DateTime @default(now()) // 收款时间
-  note       String? // 备注（如：付款方式、覆盖哪些 VPS）
-  createdAt  DateTime @default(now())
+  amountCny    Float    @default(0) // 本次收款金额（CNY）
+  payDate      DateTime @default(now()) // 收款时间
+  paymentProof String? // 实际收款截图（data/uploads 下的文件名）
+  note         String? // 备注（如：付款方式、覆盖哪些 VPS）
+  createdAt    DateTime @default(now())
 
   @@index([customerId])
 }
@@ -52,6 +53,12 @@ model VpsServer {
   provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
   providerId String?
 
+  // 计费类型：term=固定期限（有到期时间）/ auto=自动续费（无固定到期，按余额扣费）
+  billingType   String  @default("term")
+  autoCycle     String? // 仅 auto：hourly / monthly / yearly
+  cyclePriceUsd Float?  // 仅 auto：周期费用（USD）
+  balanceAmount Float?  // 仅 auto：当前账户余额（USD）
+
   // 配置信息
   cpu       String?
   ram       String?
@@ -62,7 +69,7 @@ model VpsServer {
   os        String?
 
   purchaseDate DateTime // 购买时间
-  expiryDate   DateTime // 到期时间（续费时更新为最新到期时间）
+  expiryDate   DateTime? // 到期时间（term 必填，auto 为空；续费时更新为最新到期时间）
 
   // 采购花费（你的成本；客户收款已移到 CustomerPayment 台账）
   purchaseCostUsd Float @default(0) // 采购成本（USD 标价）
@@ -73,8 +80,9 @@ model VpsServer {
   status String  @default("active") // 运行状态：active / stopped
   notes  String?
 
-  renewals VpsRenewal[]
-  vpnNodes VpnNode[]
+  renewals    VpsRenewal[]
+  vpnNodes    VpnNode[]
+  balanceLogs VpsBalanceLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -82,6 +90,23 @@ model VpsServer {
   @@index([expiryDate])
   @@index([customerId])
   @@index([providerId])
+}
+
+/// 余额更新/充值记录（仅自动续费类型）
+model VpsBalanceLog {
+  id    String    @id @default(cuid())
+  vps   VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)
+  vpsId String
+
+  logDate      DateTime @default(now()) // 操作时间
+  topupUsd     Float    @default(0) // 本次充值（USD）
+  paidCny      Float    @default(0) // 本次实际付款（CNY）
+  balanceAfter Float    @default(0) // 更新后余额（USD）
+  paymentProof String? // 付款截图（data/uploads 下的文件名）
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([vpsId])
 }
 
 /// 续费记录
@@ -111,12 +136,13 @@ model VpnNode {
   vps   VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)
   vpsId String
 
-  name     String
-  protocol String
-  address  String?
-  port     Int?
-  config   String?
-  enabled  Boolean @default(true)
+  name         String
+  protocol     String
+  address      String?
+  port         Int?
+  config       String?
+  subscribeUrl String? // 订阅链接
+  enabled      Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

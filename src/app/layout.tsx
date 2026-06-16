@@ -6,14 +6,17 @@ export const metadata: Metadata = {
   description: "VPS 采购与 VPN 节点管理系统",
 };
 
-// 在页面绘制前根据 localStorage / 系统偏好设置主题，避免深色模式闪烁
+// 在页面绘制前设置主题，避免深色模式闪烁。
+// 默认深色：无存储偏好时用 dark；用户手动切换后按其选择。
 const themeInitScript = `
 (function () {
   try {
     var t = localStorage.getItem('theme');
-    var dark = t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var dark = t ? t === 'dark' : true;
     if (dark) document.documentElement.classList.add('dark');
-  } catch (e) {}
+  } catch (e) {
+    document.documentElement.classList.add('dark');
+  }
 })();
 `;
 
