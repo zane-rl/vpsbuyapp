@@ -1,0 +1,24 @@
+[Unit]
+Description=VPS 采购与 VPN 节点管理系统
+After=network.target
+
+[Service]
+Type=simple
+# 部署目录（按实际路径修改）
+WorkingDirectory=/opt/vpsbuyapp
+# 通过环境变量指定监听端口与密钥
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=DATABASE_URL=file:./prod.db
+Environment=ADMIN_PASSWORD=请改成强密码
+Environment=SESSION_SECRET=请用openssl-rand-hex-32生成的随机串
+# 也可改为 EnvironmentFile=/opt/vpsbuyapp/.env.production 集中管理
+# EnvironmentFile=/opt/vpsbuyapp/.env.production
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

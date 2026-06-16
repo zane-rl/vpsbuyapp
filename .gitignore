@@ -1,0 +1,29 @@
+node_modules
+.next
+out
+build
+
+# env
+.env
+.env.local
+.env.production
+.env*.local
+
+# database
+*.db
+*.db-journal
+prisma/*.db
+prisma/*.db-journal
+
+# uploaded files (payment screenshots)
+/data/uploads
+
+# misc
+.DS_Store
+*.log
+
+# playwright
+/test-results
+/playwright-report
+/blob-report
+/.playwright

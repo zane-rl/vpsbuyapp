@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { num, optStr, parseDate, str } from "@/lib/validate";
+
+export const runtime = "nodejs";
+
+// 列表
+export async function GET() {
+  const list = await prisma.vpsServer.findMany({
+    orderBy: { expiryDate: "asc" },
+    include: {
+      provider: true,
+      customer: true,
+      _count: { select: { vpnNodes: true, renewals: true } },
+    },
+  });
+  return NextResponse.json(list);
+}
+
+// 新增
+export async function POST(req: NextRequest) {
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "请求格式错误" }, { status: 400 });
+  }
+
+  const name = str(body.name);
+  const purchaseDate = parseDate(body.purchaseDate);
+  const expiryDate = parseDate(body.expiryDate);
+
+  if (!name) return NextResponse.json({ error: "请填写名称" }, { status: 400 });
+  if (!purchaseDate) return NextResponse.json({ error: "请填写有效的购买时间" }, { status: 400 });
+  if (!expiryDate) return NextResponse.json({ error: "请填写有效的到期时间" }, { status: 400 });
+
+  const created = await prisma.vpsServer.create({
+    data: {
+      name,
+      customerId: optStr(body.customerId),
+      providerId: optStr(body.providerId),
+      cpu: optStr(body.cpu),
+      ram: optStr(body.ram),
+      disk: optStr(body.disk),
+      bandwidth: optStr(body.bandwidth),
+      region: optStr(body.region),
+      ipAddress: optStr(body.ipAddress),
+      os: optStr(body.os),
+      purchaseDate,
+      expiryDate,
+      purchaseCostUsd: num(body.purchaseCostUsd),
+      purchasePaidCny: num(body.purchasePaidCny),
+      paymentProof: optStr(body.paymentProof),
+      status: str(body.status) === "stopped" ? "stopped" : "active",
+      notes: optStr(body.notes),
+    },
+  });
+
+  return NextResponse.json(created, { status: 201 });
+}

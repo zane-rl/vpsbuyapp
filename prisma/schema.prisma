@@ -1,0 +1,125 @@
+// VPS 采购与 VPN 节点管理系统 数据模型
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// VPS 提供商（单独维护，仅名称）
+model Provider {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  vpsServers VpsServer[]
+  createdAt  DateTime    @default(now())
+}
+
+/// 客户（VPS 与收款均归属客户，按客户结算）
+model Customer {
+  id         String           @id @default(cuid())
+  name       String           @unique
+  note       String?
+  vpsServers VpsServer[]
+  payments   CustomerPayment[]
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+}
+
+/// 客户收款记录（独立台账：一笔付款可对应多台 VPS，可多次付款）
+model CustomerPayment {
+  id         String   @id @default(cuid())
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId String
+  amountCny  Float    @default(0) // 本次收款金额（CNY）
+  payDate    DateTime @default(now()) // 收款时间
+  note       String? // 备注（如：付款方式、覆盖哪些 VPS）
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+/// VPS 服务器
+model VpsServer {
+  id String @id @default(cuid())
+
+  name String // 备注名/标识，如 "香港-01"
+
+  // 归属客户 / 提供商（从各自维护的列表中选择）
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerId String?
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerId String?
+
+  // 配置信息
+  cpu       String?
+  ram       String?
+  disk      String?
+  bandwidth String?
+  region    String?
+  ipAddress String?
+  os        String?
+
+  purchaseDate DateTime // 购买时间
+  expiryDate   DateTime // 到期时间（续费时更新为最新到期时间）
+
+  // 采购花费（你的成本；客户收款已移到 CustomerPayment 台账）
+  purchaseCostUsd Float @default(0) // 采购成本（USD 标价）
+  purchasePaidCny Float @default(0) // 购买实际付款（CNY）
+
+  paymentProof String? // 实际付款截图（data/uploads 下的文件名）
+
+  status String  @default("active") // 运行状态：active / stopped
+  notes  String?
+
+  renewals VpsRenewal[]
+  vpnNodes VpnNode[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiryDate])
+  @@index([customerId])
+  @@index([providerId])
+}
+
+/// 续费记录
+model VpsRenewal {
+  id    String    @id @default(cuid())
+  vps   VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)
+  vpsId String
+
+  renewDate      DateTime @default(now()) // 续费操作时间
+  previousExpiry DateTime // 续费前到期时间（留档）
+  newExpiry      DateTime // 续费后到期时间
+
+  costUsd Float @default(0) // 续费成本（USD）
+  paidCny Float @default(0) // 续费实际付款（CNY）
+
+  paymentProof String? // 本次续费付款截图（data/uploads 下的文件名）
+
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([vpsId])
+}
+
+/// VPN 节点（归属对应 VPS）
+model VpnNode {
+  id    String    @id @default(cuid())
+  vps   VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)
+  vpsId String
+
+  name     String
+  protocol String
+  address  String?
+  port     Int?
+  config   String?
+  enabled  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([vpsId])
+}
