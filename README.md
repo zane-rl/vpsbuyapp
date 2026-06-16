@@ -51,6 +51,8 @@ sudo ufw allow 3000/tcp || true
 # 浏览器打开 http://<服务器IP>:3000/login
 ```
 
-完整步骤、systemd、Nginx+HTTPS、备份与排查见 **[docs/06-部署文档.md](docs/06-部署文档.md)**。
+**更新到最新代码**（含数据库迁移）：`cd ~/vpsbuyapp && bash deploy/update.sh`。
+
+完整步骤、更新、systemd、Nginx+HTTPS、备份与排查见 **[docs/06-部署文档.md](docs/06-部署文档.md)**。
 
 > 关键顺序：`npm ci` 的 postinstall 会 `prisma generate`，依赖 `DATABASE_URL`，所以**先有 `.env` 再装依赖**（`bootstrap.sh` 已处理）。数据为 `prisma/prod.db` 与 `data/uploads/`，都需可写并备份。
