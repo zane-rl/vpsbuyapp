@@ -29,8 +29,10 @@ export async function POST(req: NextRequest) {
 
   const name = str(body.name);
   const purchaseDate = parseDate(body.purchaseDate);
+  const customerId = str(body.customerId);
 
   if (!name) return NextResponse.json({ error: "请填写名称" }, { status: 400 });
+  if (!customerId) return NextResponse.json({ error: "请选择所属客户" }, { status: 400 });
   if (!purchaseDate) return NextResponse.json({ error: "请填写有效的购买时间" }, { status: 400 });
 
   const billing = parseBilling(body);
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
   const created = await prisma.vpsServer.create({
     data: {
       name,
-      customerId: optStr(body.customerId),
+      customerId,
       providerId: optStr(body.providerId),
       ...billing.fields,
       cpu: optStr(body.cpu),

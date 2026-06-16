@@ -6,8 +6,6 @@ import VpsForm from "../VpsForm";
 import { toFormData } from "../vpsFormData";
 import RenewForm from "./RenewForm";
 import RenewalDeleteButton from "./RenewalDeleteButton";
-import BalanceForm from "./BalanceForm";
-import BalanceDeleteButton from "./BalanceDeleteButton";
 import NodeManager from "./NodeManager";
 import { cycleLabel, money } from "@/lib/money";
 
@@ -19,9 +17,8 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
       where: { id: params.id },
       include: {
         provider: true,
-        customer: true,
+        customer: { include: { recharges: { orderBy: { rechargeDate: "desc" }, take: 1 } } },
         renewals: { orderBy: { renewDate: "desc" } },
-        balanceLogs: { orderBy: { logDate: "desc" } },
         vpnNodes: { orderBy: { createdAt: "asc" } },
       },
     }),
@@ -33,6 +30,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
 
   const validity = vpsValidity(vps);
   const isAuto = vps.billingType === "auto";
+  const sharedBalance = vps.customer?.recharges[0]?.balanceAfter ?? 0;
 
   return (
     <div className="animate-fade-in mx-auto max-w-3xl space-y-6">
@@ -51,66 +49,31 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
           {isAuto
             ? ` · 按${cycleLabel(vps.autoCycle)}自动续费${
                 vps.cyclePriceUsd != null ? ` · $${money(vps.cyclePriceUsd)}/${cycleLabel(vps.autoCycle)}` : ""
-              }${vps.balanceAmount != null ? ` · 余额 $${money(vps.balanceAmount)}` : ""}`
+              }`
             : ` · 到期 ${formatDate(vps.expiryDate)}`}
         </p>
       </div>
 
-      {/* 自动续费：更新余额/充值 */}
+      {/* 自动续费：客户共享余额（只读，充值在客户页面统一进行） */}
       {isAuto && (
         <section className="card p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              余额 / 充值{vps.balanceAmount != null && (
-                <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
-                  当前余额 ${money(vps.balanceAmount)}
-                </span>
-              )}
-            </h2>
-            <BalanceForm vpsId={vps.id} />
-          </div>
-          {vps.balanceLogs.length === 0 ? (
-            <p className="text-sm text-slate-400 dark:text-slate-500">暂无余额/充值记录</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="table-head">
-                    <th className="py-2 pr-4">时间</th>
-                    <th className="py-2 pr-4 text-right">充值 $</th>
-                    <th className="py-2 pr-4 text-right">实付 ¥</th>
-                    <th className="py-2 pr-4 text-right">更新后余额 $</th>
-                    <th className="py-2 pr-4">截图</th>
-                    <th className="py-2 pr-4">备注</th>
-                    <th className="py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vps.balanceLogs.map((b) => (
-                    <tr key={b.id} className="table-row">
-                      <td className="py-2.5 pr-4 text-slate-600 dark:text-slate-300">{formatDate(b.logDate)}</td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-slate-600 dark:text-slate-300">${money(b.topupUsd)}</td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(b.paidCny)}</td>
-                      <td className="py-2.5 pr-4 text-right tabular-nums text-slate-700 dark:text-slate-200">${money(b.balanceAfter)}</td>
-                      <td className="py-2.5 pr-4">
-                        {b.paymentProof ? (
-                          <a href={`/api/files/${b.paymentProof}`} target="_blank" rel="noreferrer">
-                            <img src={`/api/files/${b.paymentProof}`} alt="截图" className="h-8 w-8 rounded border border-slate-200 object-cover dark:border-slate-700" />
-                          </a>
-                        ) : (
-                          <span className="text-slate-300 dark:text-slate-600">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4 text-slate-400 dark:text-slate-500">{b.note || "-"}</td>
-                      <td className="py-2.5 text-right">
-                        <BalanceDeleteButton logId={b.id} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">余额 / 充值</h2>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">所属客户共享余额（USD）</p>
+              <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                ${money(sharedBalance)}
+              </p>
             </div>
-          )}
+            {vps.customer ? (
+              <Link href={`/admin/customers/${vps.customer.id}`} className="btn-secondary shrink-0">
+                去客户页充值 →
+              </Link>
+            ) : null}
+          </div>
+          <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
+            自动续费的余额由所属客户统一充值并共享，余额取该客户最近一次充值后的实际余额。
+          </p>
         </section>
       )}
 

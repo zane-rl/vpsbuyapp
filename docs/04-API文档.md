@@ -44,7 +44,7 @@
 按到期时间升序，含 `_count.vpnNodes` 与 `_count.renewals`。
 
 ### POST `/api/admin/vps` — 新增
-请求体（`name` / `purchaseDate` / `expiryDate` 必填，其余可选）。`customerId`/`providerId` 取自客户、提供商列表；**已无 `clientPaymentCny`**（收款改到收款台账）：
+请求体（`name` / `customerId` / `purchaseDate` / `expiryDate` 必填，其余可选）。**`customerId` 为必填**（VPS 必须关联客户，缺失返回 `400「请选择所属客户」`）；`providerId` 取自提供商列表；**已无 `clientPaymentCny`**（收款改到收款台账）：
 ```json
 {
   "name": "香港-01",
@@ -65,18 +65,13 @@
 `paymentProof` 为 `POST /api/admin/upload` 返回的文件名（可选）。响应：`201` 新建对象。缺必填或日期非法返回 `400`。`PATCH /api/admin/vps/{id}` 请求体同此。续费 `POST /api/admin/vps/{id}/renew` 同理已移除 `clientPaymentCny`、可带 `paymentProof`。
 
 **计费类型字段**：`billingType`(`term`默认 / `auto`)。
-- `term`：`expiryDate` 必填（按上例）。
-- `auto`：忽略 `expiryDate`（存 null）；可带 `autoCycle`(`hourly`/`monthly`默认/`yearly`)、`cyclePriceUsd`(周期费用)、`balanceAmount`(USD)。
+- `term`：`expiryDate` 必填（按上例）；可带 `termPeriod`(`monthly`默认/`quarterly`/`yearly`，购买周期，前端按购买时间自动推算到期）。
+- `auto`：忽略 `expiryDate`（存 null）；可带 `autoCycle`(`hourly`/`monthly`默认/`quarterly`/`yearly`)、`cyclePriceUsd`(周期费用，仅展示)。**余额改为客户级共享**，不再有单台 `balanceAmount`。
 
 **节点字段**：`subscribeUrl`（订阅链接，可选）。
 
 ### POST `/api/admin/vps/{id}/renew` — 续费（仅 term）
-对 `auto` 类型返回 `400「自动续费类型无固定到期，请使用更新余额/充值」`。
-
-### POST `/api/admin/vps/{id}/balance` — 更新余额/充值（仅 auto）
-请求体 `{ topupUsd?, paidCny?, balanceAfter, logDate?, paymentProof?, note? }`（余额账户按 USD，另记当时实付 CNY）。事务：新增 `VpsBalanceLog` + 更新 VPS 当前余额。对 `term` 返回 `400`。其中 `paidCny` 计入总实付成本/客户结算。
-### DELETE `/api/admin/balance-logs/{id}` — 删除余额/充值记录
-仅删历史，不改当前余额。
+对 `auto` 类型返回 `400`。自动续费余额改在客户页面充值（见「管理 — 客户充值」），单台 VPS 不再有余额/充值接口（原 `/api/admin/vps/{id}/balance` 已移除）。
 
 ### GET `/api/admin/vps/{id}` — 详情
 含 `renewals`（按续费时间倒序）与 `vpnNodes`（按创建时间正序）。不存在返回 `404`。
@@ -151,7 +146,7 @@
 
 - `GET /api/admin/customers` — 列表（含 `_count.vpsServers / payments`）
 - `POST /api/admin/customers` — 新增 `{ name, note? }`，名称唯一
-- `GET /api/admin/customers/{id}` — 详情（含名下 VPS、收款记录）
+- `GET /api/admin/customers/{id}` — 详情（含名下 VPS、收款记录、充值记录）
 - `PATCH /api/admin/customers/{id}` — 编辑 `{ name, note? }`
 - `DELETE /api/admin/customers/{id}` — 删除（收款级联删，名下 VPS customerId 置空）
 
@@ -159,6 +154,11 @@
 
 - `POST /api/admin/payments` — 新增 `{ customerId, amountCny, payDate?, note?, paymentProof? }`（payDate 省略取当前；paymentProof 为收款截图文件名）
 - `DELETE /api/admin/payments/{id}` — 删除收款记录
+
+## 管理 — 客户充值（客户级共享余额）
+
+- `POST /api/admin/recharges` — 新增 `{ customerId, amountUsd, paidCny?, balanceAfter?, rechargeDate?, note?, paymentProof? }`（rechargeDate 省略取当前）。`amountUsd` 计入总成本、`paidCny` 计入总实付/结算；`balanceAfter` 为充值后服务商实际余额，客户当前共享余额取最近一条。
+- `DELETE /api/admin/recharges/{id}` — 删除充值记录
 
 ## 字段校验规则（`src/lib/validate.ts`）
 

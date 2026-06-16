@@ -18,13 +18,31 @@ model Provider {
 
 /// 客户（VPS 与收款均归属客户，按客户结算）
 model Customer {
-  id         String           @id @default(cuid())
-  name       String           @unique
+  id         String             @id @default(cuid())
+  name       String             @unique
   note       String?
   vpsServers VpsServer[]
   payments   CustomerPayment[]
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  recharges  CustomerRecharge[]
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+}
+
+/// 客户充值记录（客户级共享余额：名下所有自动续费 VPS 共用）
+/// 充值美元计入总成本、实付人民币计入总实付/差额；当前共享余额取最近一条的 balanceAfter
+model CustomerRecharge {
+  id           String   @id @default(cuid())
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerId   String
+  amountUsd    Float    @default(0) // 本次充值（USD，计入总成本）
+  paidCny      Float    @default(0) // 本次实际付款（CNY，计入总实付/差额）
+  balanceAfter Float    @default(0) // 充值后服务商实际余额（USD），当前余额取最近一条
+  rechargeDate DateTime @default(now()) // 充值时间
+  paymentProof String? // 付款截图（data/uploads 下的文件名）
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([customerId])
 }
 
 /// 客户收款记录（独立台账：一笔付款可对应多台 VPS，可多次付款）
@@ -53,11 +71,12 @@ model VpsServer {
   provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
   providerId String?
 
-  // 计费类型：term=固定期限（有到期时间）/ auto=自动续费（无固定到期，按余额扣费）
+  // 计费类型：term=固定期限（有到期时间）/ auto=自动续费（无固定到期，余额由所属客户共享充值）
   billingType   String  @default("term")
-  autoCycle     String? // 仅 auto：hourly / monthly / yearly
-  cyclePriceUsd Float?  // 仅 auto：周期费用（USD）
-  balanceAmount Float?  // 仅 auto：当前账户余额（USD）
+  termPeriod    String? // 仅 term：monthly / quarterly / yearly（购买周期，用于推算到期）
+  autoCycle     String? // 仅 auto：hourly / monthly / quarterly / yearly
+  cyclePriceUsd Float?  // 仅 auto：周期费用（USD，仅展示）
+  balanceAmount Float?  // 已弃用：余额改为客户级共享（CustomerRecharge），保留列避免线上重建表
 
   // 配置信息
   cpu       String?
@@ -92,7 +111,7 @@ model VpsServer {
   @@index([providerId])
 }
 
-/// 余额更新/充值记录（仅自动续费类型）
+/// 已弃用：自动续费余额改为客户级共享（见 CustomerRecharge）。保留模型避免线上重建表，应用层不再引用。
 model VpsBalanceLog {
   id    String    @id @default(cuid())
   vps   VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)

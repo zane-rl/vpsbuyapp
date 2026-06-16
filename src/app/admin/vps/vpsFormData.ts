@@ -6,9 +6,9 @@ export type VpsFormData = {
   customerId: string;
   providerId: string;
   billingType: string; // "term" | "auto"
-  autoCycle: string; // "hourly" | "monthly" | "yearly"（auto 时）
-  cyclePriceUsd: string; // auto 周期费用（USD）
-  balanceAmount: string; // auto 余额（USD）
+  termPeriod: string; // term 购买周期 "monthly" | "quarterly" | "yearly"
+  autoCycle: string; // "hourly" | "monthly" | "quarterly" | "yearly"（auto 时）
+  cyclePriceUsd: string; // auto 周期费用（USD，仅展示）
   cpu: string;
   ram: string;
   disk: string;
@@ -33,9 +33,9 @@ export function toFormData(v: any): VpsFormData {
     customerId: v.customerId ?? "",
     providerId: v.providerId ?? "",
     billingType: v.billingType ?? "term",
+    termPeriod: v.termPeriod ?? "monthly",
     autoCycle: v.autoCycle ?? "monthly",
     cyclePriceUsd: v.cyclePriceUsd == null ? "" : String(v.cyclePriceUsd),
-    balanceAmount: v.balanceAmount == null ? "" : String(v.balanceAmount),
     cpu: v.cpu ?? "",
     ram: v.ram ?? "",
     disk: v.disk ?? "",

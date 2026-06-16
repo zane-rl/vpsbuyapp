@@ -13,7 +13,6 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       provider: true,
       customer: true,
       renewals: { orderBy: { renewDate: "desc" } },
-      balanceLogs: { orderBy: { logDate: "desc" } },
       vpnNodes: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -35,8 +34,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const name = str(body.name);
   const purchaseDate = parseDate(body.purchaseDate);
+  const customerId = str(body.customerId);
 
   if (!name) return NextResponse.json({ error: "请填写名称" }, { status: 400 });
+  if (!customerId) return NextResponse.json({ error: "请选择所属客户" }, { status: 400 });
   if (!purchaseDate) return NextResponse.json({ error: "请填写有效的购买时间" }, { status: 400 });
 
   const billing = parseBilling(body);
@@ -46,7 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     where: { id: params.id },
     data: {
       name,
-      customerId: optStr(body.customerId),
+      customerId,
       providerId: optStr(body.providerId),
       ...billing.fields,
       cpu: optStr(body.cpu),

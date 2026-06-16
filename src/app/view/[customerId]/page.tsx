@@ -16,33 +16,28 @@ export default async function CustomerPublicPage({ params }: { params: { custome
           provider: true,
           vpnNodes: { where: { enabled: true }, orderBy: { createdAt: "asc" } },
           renewals: { select: { costUsd: true, paidCny: true } },
-          balanceLogs: { select: { topupUsd: true, paidCny: true } },
         },
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
+      recharges: { orderBy: { rechargeDate: "desc" } },
     },
   });
 
   if (!customer) notFound();
 
   const list = customer.vpsServers;
+  const rechargeCostUsd = customer.recharges.reduce((s, r) => s + r.amountUsd, 0);
+  const rechargePaidCny = customer.recharges.reduce((s, r) => s + r.paidCny, 0);
+  // 当前共享余额 = 最近一次充值后的实际余额；有自动续费 VPS 时展示
+  const hasAuto = list.some((v) => v.billingType === "auto");
+  const sharedBalanceUsd = customer.recharges[0]?.balanceAfter ?? 0;
   // 合计：含续费与充值的成本与实付
-  const totalCostUsd = list.reduce(
-    (s, v) =>
-      s +
-      v.purchaseCostUsd +
-      v.renewals.reduce((rs, r) => rs + r.costUsd, 0) +
-      v.balanceLogs.reduce((bs, b) => bs + b.topupUsd, 0),
-    0
-  );
-  const totalPaidCny = list.reduce(
-    (s, v) =>
-      s +
-      v.purchasePaidCny +
-      v.renewals.reduce((rs, r) => rs + r.paidCny, 0) +
-      v.balanceLogs.reduce((bs, b) => bs + b.paidCny, 0),
-    0
-  );
+  const totalCostUsd =
+    list.reduce((s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0), 0) +
+    rechargeCostUsd;
+  const totalPaidCny =
+    list.reduce((s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0) +
+    rechargePaidCny;
 
   return (
     <main className="app-bg min-h-screen">
@@ -64,7 +59,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
         </header>
 
         {/* 合计 */}
-        <section className="mb-6 grid gap-4 sm:grid-cols-2">
+        <section className={`mb-6 grid gap-4 ${hasAuto ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <div className="card p-4">
             <p className="text-xs text-slate-400 dark:text-slate-500">总购买成本</p>
             <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
@@ -77,6 +72,14 @@ export default async function CustomerPublicPage({ params }: { params: { custome
               ¥{money(totalPaidCny)}<span className="ml-1 text-xs font-normal text-slate-400">CNY</span>
             </p>
           </div>
+          {hasAuto && (
+            <div className="card p-4">
+              <p className="text-xs text-slate-400 dark:text-slate-500">当前充值余额</p>
+              <p className="mt-1.5 text-2xl font-bold tracking-tight text-sky-600 dark:text-sky-400">
+                ${money(sharedBalanceUsd)}<span className="ml-1 text-xs font-normal text-slate-400">USD</span>
+              </p>
+            </div>
+          )}
         </section>
 
         {list.length === 0 ? (

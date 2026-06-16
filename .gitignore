@@ -27,3 +27,6 @@ prisma/*.db-journal
 /playwright-report
 /blob-report
 /.playwright
+
+# TypeScript 增量构建缓存
+tsconfig.tsbuildinfo

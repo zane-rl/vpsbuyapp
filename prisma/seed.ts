@@ -127,7 +127,7 @@ async function main() {
     data: { customerId: customerB.id, amountCny: 70, payDate: daysFromNow(-390), note: "首次付款" },
   });
 
-  // 客户A：一台自动续费 VPS（按小时扣费，无固定到期）
+  // 客户A：一台自动续费 VPS（按小时扣费，无固定到期，余额由客户级共享充值）
   await prisma.vpsServer.create({
     data: {
       name: "新加坡-按量-01",
@@ -136,7 +136,6 @@ async function main() {
       billingType: "auto",
       autoCycle: "hourly",
       cyclePriceUsd: 0.018,
-      balanceAmount: 12.5,
       cpu: "1 vCPU",
       ram: "1 GB",
       disk: "25 GB SSD",
@@ -150,13 +149,15 @@ async function main() {
       purchasePaidCny: 72,
       status: "active",
       notes: "按小时自动续费，余额不足会停机",
-      balanceLogs: {
-        create: [
-          { logDate: daysFromNow(-15), topupUsd: 10, paidCny: 72, balanceAfter: 10, note: "首次充值" },
-          { logDate: daysFromNow(-2), topupUsd: 5, paidCny: 36, balanceAfter: 12.5, note: "补充余额" },
-        ],
-      },
     },
+  });
+
+  // 客户A：客户级充值（共享给名下自动续费 VPS），当前余额取最近一条 balanceAfter
+  await prisma.customerRecharge.createMany({
+    data: [
+      { customerId: customerA.id, amountUsd: 10, paidCny: 72, balanceAfter: 10, rechargeDate: daysFromNow(-15), note: "首次充值" },
+      { customerId: customerA.id, amountUsd: 5, paidCny: 36, balanceAfter: 12.5, rechargeDate: daysFromNow(-2), note: "补充余额" },
+    ],
   });
 
   console.log("✅ 种子数据已写入");

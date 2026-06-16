@@ -85,6 +85,14 @@ export function parseDateInput(value: string): Date {
   return new Date(y, (m ?? 1) - 1, d ?? 1);
 }
 
+/** 按购买周期（月/季度/年）在指定日期上累加，得到到期日。非法周期返回原值。 */
+export function addPeriod(date: Date | string, period: string | null | undefined): Date {
+  const base = typeof date === "string" ? parseDateInput(date) : new Date(date);
+  const months = period === "yearly" ? 12 : period === "quarterly" ? 3 : period === "monthly" ? 1 : 0;
+  if (!months) return base;
+  return new Date(base.getFullYear(), base.getMonth() + months, base.getDate());
+}
+
 // ——— 计费类型统一判定（固定期限 / 自动续费）———
 
 export type Validity =

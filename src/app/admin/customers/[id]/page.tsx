@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
 import PaymentManager from "./PaymentManager";
+import RechargeManager from "./RechargeManager";
 import ShareLink from "./ShareLink";
 import CustomerEditor from "./CustomerEditor";
 
@@ -17,32 +18,31 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         include: {
           provider: true,
           renewals: { select: { costUsd: true, paidCny: true } },
-          balanceLogs: { select: { topupUsd: true, paidCny: true } },
         },
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
       payments: { orderBy: { payDate: "desc" } },
+      recharges: { orderBy: { rechargeDate: "desc" } },
     },
   });
 
   if (!customer) notFound();
 
-  const totalCostUsd = customer.vpsServers.reduce(
-    (s, v) =>
-      s +
-      v.purchaseCostUsd +
-      v.renewals.reduce((rs, r) => rs + r.costUsd, 0) +
-      v.balanceLogs.reduce((bs, b) => bs + b.topupUsd, 0),
-    0
-  );
-  const totalPaidCny = customer.vpsServers.reduce(
-    (s, v) =>
-      s +
-      v.purchasePaidCny +
-      v.renewals.reduce((rs, r) => rs + r.paidCny, 0) +
-      v.balanceLogs.reduce((bs, b) => bs + b.paidCny, 0),
-    0
-  );
+  const rechargeCostUsd = customer.recharges.reduce((s, r) => s + r.amountUsd, 0);
+  const rechargePaidCny = customer.recharges.reduce((s, r) => s + r.paidCny, 0);
+  // 当前共享余额 = 最近一次充值后的实际余额（recharges 已按 rechargeDate desc 排序）
+  const sharedBalanceUsd = customer.recharges[0]?.balanceAfter ?? 0;
+
+  const totalCostUsd =
+    customer.vpsServers.reduce(
+      (s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0),
+      0
+    ) + rechargeCostUsd;
+  const totalPaidCny =
+    customer.vpsServers.reduce(
+      (s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0),
+      0
+    ) + rechargePaidCny;
   const totalReceivedCny = customer.payments.reduce((s, p) => s + p.amountCny, 0);
   const diffCny = totalReceivedCny - totalPaidCny;
 
@@ -52,6 +52,16 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
     payDate: p.payDate.toISOString(),
     note: p.note,
     paymentProof: p.paymentProof,
+  }));
+
+  const recharges = customer.recharges.map((r) => ({
+    id: r.id,
+    amountUsd: r.amountUsd,
+    paidCny: r.paidCny,
+    balanceAfter: r.balanceAfter,
+    rechargeDate: r.rechargeDate.toISOString(),
+    note: r.note,
+    paymentProof: r.paymentProof,
   }));
 
   const cards = [
@@ -147,6 +157,23 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
             </table>
           </div>
         )}
+      </section>
+
+      {/* 充值台账（客户级共享余额，覆盖名下自动续费 VPS） */}
+      <section className="card p-6">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">充值记录</h2>
+          <div className="text-right">
+            <span className="text-xs text-slate-400 dark:text-slate-500">当前共享余额</span>
+            <span className="ml-2 text-lg font-bold tracking-tight text-sky-600 dark:text-sky-400">
+              ${money(sharedBalanceUsd)}
+            </span>
+          </div>
+        </div>
+        <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
+          给客户自动续费 VPS 的预充值。充值美元计入总成本、实付人民币计入总实付；余额取最近一次充值后的实际余额。
+        </p>
+        <RechargeManager customerId={customer.id} recharges={recharges} />
       </section>
 
       {/* 收款台账 */}

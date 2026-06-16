@@ -39,6 +39,8 @@ test.describe("管理后台完整流程", () => {
     await createForm.getByPlaceholder("香港-01").fill(name);
     await createForm.getByPlaceholder("2 vCPU").fill("2 vCPU");
     await createForm.getByPlaceholder("2 GB").fill("4 GB");
+    // 所属客户必填，选第一个真实客户（种子数据中存在）
+    await createForm.locator("select").first().selectOption({ index: 1 });
     const dateInputs = createForm.locator('input[type="date"]');
     await dateInputs.nth(0).fill(ymd(0)); // 购买时间
     await dateInputs.nth(1).fill(ymd(30)); // 到期时间

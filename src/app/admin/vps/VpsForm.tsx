@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { VpsFormData } from "./vpsFormData";
 import ImageUpload from "../ImageUpload";
+import { addPeriod, formatDate } from "@/lib/dates";
 
 type Option = { id: string; name: string };
 
@@ -12,9 +13,9 @@ const empty: VpsFormData = {
   customerId: "",
   providerId: "",
   billingType: "term",
+  termPeriod: "monthly",
   autoCycle: "monthly",
   cyclePriceUsd: "",
-  balanceAmount: "",
   cpu: "",
   ram: "",
   disk: "",
@@ -67,9 +68,31 @@ export default function VpsForm({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  // 选择购买周期 / 购买时间时，按 月/季/年 自动推算到期时间（仍可手动改）
+  function setPurchaseDate(value: string) {
+    setForm((f) => {
+      const next = { ...f, purchaseDate: value };
+      if (f.billingType === "term" && value && f.termPeriod) {
+        next.expiryDate = formatDate(addPeriod(value, f.termPeriod));
+      }
+      return next;
+    });
+  }
+  function setTermPeriod(value: string) {
+    setForm((f) => {
+      const next = { ...f, termPeriod: value };
+      if (f.purchaseDate) next.expiryDate = formatDate(addPeriod(f.purchaseDate, value));
+      return next;
+    });
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    if (!form.customerId) {
+      setError("请选择所属客户");
+      return;
+    }
     setSaving(true);
     try {
       const url = isEdit ? `/api/admin/vps/${form.id}` : "/api/admin/vps";
@@ -119,9 +142,9 @@ export default function VpsForm({
             placeholder="香港-01"
           />
         </Field>
-        <Field label="所属客户">
+        <Field label="所属客户 *">
           <select className={inputCls} value={form.customerId} onChange={(e) => set("customerId", e.target.value)}>
-            <option value="">— 未指定 —</option>
+            <option value="">— 请选择 —</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
@@ -192,20 +215,30 @@ export default function VpsForm({
           </button>
         </div>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid gap-4 sm:grid-cols-4">
           <Field label="购买时间 *">
-            <input type="date" className={inputCls} value={form.purchaseDate} onChange={(e) => set("purchaseDate", e.target.value)} />
+            <input type="date" className={inputCls} value={form.purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} />
           </Field>
 
           {form.billingType === "term" ? (
-            <Field label="到期时间 *">
-              <input type="date" className={inputCls} value={form.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} />
-            </Field>
+            <>
+              <Field label="购买周期">
+                <select className={inputCls} value={form.termPeriod} onChange={(e) => setTermPeriod(e.target.value)}>
+                  <option value="monthly">按月</option>
+                  <option value="quarterly">按季度</option>
+                  <option value="yearly">按年</option>
+                </select>
+              </Field>
+              <Field label="到期时间 *">
+                <input type="date" className={inputCls} value={form.expiryDate} onChange={(e) => set("expiryDate", e.target.value)} />
+              </Field>
+            </>
           ) : (
             <Field label="续费周期">
               <select className={inputCls} value={form.autoCycle} onChange={(e) => set("autoCycle", e.target.value)}>
                 <option value="hourly">按小时</option>
                 <option value="monthly">按月</option>
+                <option value="quarterly">按季度</option>
                 <option value="yearly">按年</option>
               </select>
             </Field>
@@ -219,14 +252,22 @@ export default function VpsForm({
           </Field>
         </div>
 
+        {form.billingType === "term" && (
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+            选择购买周期后，到期时间会按购买时间自动推算，可手动调整。
+          </p>
+        )}
+
         {form.billingType === "auto" && (
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <Field label="周期费用 (USD)">
               <input type="number" step="0.001" min="0" className={inputCls} value={form.cyclePriceUsd} onChange={(e) => set("cyclePriceUsd", e.target.value)} placeholder="每周期单价，可选" />
             </Field>
-            <Field label="账户余额 (USD)">
-              <input type="number" step="0.01" min="0" className={inputCls} value={form.balanceAmount} onChange={(e) => set("balanceAmount", e.target.value)} placeholder="可选" />
-            </Field>
+            <div className="sm:col-span-2 flex items-end">
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                自动续费余额由「所属客户」统一充值并共享，请在客户页面记录充值。
+              </p>
+            </div>
           </div>
         )}
       </div>

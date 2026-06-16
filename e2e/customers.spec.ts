@@ -39,8 +39,13 @@ test.describe("客户结算 + 公开页", () => {
     await addForm.getByPlaceholder("客户名称").fill(cname);
     await addForm.getByRole("button", { name: "添加" }).click();
 
+    // 客户列表行内应有「复制 / 打开」专属链接按钮
+    const row = page.locator("tr", { hasText: cname });
+    await expect(row.getByRole("button", { name: "复制" })).toBeVisible();
+    await expect(row.getByRole("link", { name: /打开/ })).toBeVisible();
+
     // 进入客户详情
-    await page.locator("tr", { hasText: cname }).getByRole("link", { name: "管理" }).click();
+    await row.getByRole("link", { name: "管理" }).click();
     await page.waitForURL(/\/admin\/customers\/[^/]+$/);
     const customerUrl = page.url();
     const customerId = customerUrl.split("/").pop()!;
@@ -48,11 +53,22 @@ test.describe("客户结算 + 公开页", () => {
 
     // 记一笔收款 188.00
     const payForm = page.locator("form", { hasText: "记一笔收款" });
-    await payForm.getByPlaceholder("0.00").fill("188");
+    await payForm.getByPlaceholder("0.00").first().fill("188");
     await payForm.getByRole("button", { name: "记一笔收款" }).click();
 
     // 收款台账出现该金额，差额卡片显示 ¥188.00（无 VPS 时实付为 0）
     await expect(page.getByText("¥188.00").first()).toBeVisible();
+
+    // 记一笔充值：$10 / ¥50 / 充值后余额 $10 → 计入总成本与总实付
+    const rechargeForm = page.locator("form", { hasText: "记一笔充值" });
+    await rechargeForm.locator('input[type="number"]').nth(0).fill("10");
+    await rechargeForm.locator('input[type="number"]').nth(1).fill("50");
+    await rechargeForm.locator('input[type="number"]').nth(2).fill("10");
+    await rechargeForm.getByRole("button", { name: "记一笔充值" }).click();
+
+    // 总成本计入 $10.00；差额 = 收款188 − 实付50 = ¥138.00
+    await expect(page.getByText("$10.00").first()).toBeVisible();
+    await expect(page.getByText("¥138.00").first()).toBeVisible();
 
     // 公开客户页显示合计标题
     await page.goto(`/view/${customerId}`);
