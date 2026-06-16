@@ -8,6 +8,15 @@ import {
 
 export const runtime = "nodejs";
 
+// 是否经由 HTTPS 访问：直连看请求协议，经反代看 X-Forwarded-Proto。
+// 仅在 HTTPS 下给 Cookie 加 Secure 属性，否则 HTTP 部署时浏览器会丢弃 Secure Cookie 导致登录后仍被打回。
+function isHttps(req: NextRequest): boolean {
+  return (
+    req.nextUrl.protocol === "https:" ||
+    req.headers.get("x-forwarded-proto") === "https"
+  );
+}
+
 // 登录
 export async function POST(req: NextRequest) {
   let password = "";
@@ -27,7 +36,7 @@ export async function POST(req: NextRequest) {
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps(req),
     path: "/",
     maxAge: SESSION_MAX_AGE,
   });
@@ -35,12 +44,12 @@ export async function POST(req: NextRequest) {
 }
 
 // 退出登录
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    secure: isHttps(req),
     path: "/",
     maxAge: 0,
   });
