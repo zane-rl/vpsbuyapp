@@ -29,6 +29,8 @@ test.describe("客户专属公开页 /view/<id>", () => {
     await expect(page.getByRole("heading", { name: "VPS 服务清单" })).toBeVisible();
     await expect(page.getByText("总购买成本")).toBeVisible();
     await expect(page.getByText("总实际付款")).toBeVisible();
+    await expect(page.getByText("总收款")).toBeVisible();
+    await expect(page.getByText("差额（收款 − 实付）")).toBeVisible();
     // 剩余时间以彩色徽章呈现（仅一个，不再有重复的「剩余时间」字段）
     await expect(page.getByText(/剩 \d+ 天|今天到期|已过期/).first()).toBeVisible();
     await expect(page.getByText("剩余时间")).toHaveCount(0);

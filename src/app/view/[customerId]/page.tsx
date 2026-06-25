@@ -22,6 +22,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
       recharges: { orderBy: { rechargeDate: "desc" } },
+      payments: { select: { amountCny: true } },
     },
   });
 
@@ -41,6 +42,8 @@ export default async function CustomerPublicPage({ params }: { params: { custome
   const totalPaidCny =
     list.reduce((s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0) +
     rechargePaidCny;
+  const totalReceivedCny = customer.payments.reduce((s, p) => s + p.amountCny, 0);
+  const diffCny = totalReceivedCny - totalPaidCny;
 
   return (
     <main className="app-bg min-h-screen">
@@ -62,7 +65,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
         </header>
 
         {/* 合计 */}
-        <section className={`mb-6 grid gap-4 ${hasAuto ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        <section className={`mb-6 grid gap-4 sm:grid-cols-2 ${hasAuto ? "lg:grid-cols-5" : "lg:grid-cols-4"}`}>
           <div className="card p-4">
             <p className="text-xs text-slate-400 dark:text-slate-500">总购买成本</p>
             <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
@@ -73,6 +76,18 @@ export default async function CustomerPublicPage({ params }: { params: { custome
             <p className="text-xs text-slate-400 dark:text-slate-500">总实际付款</p>
             <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
               ¥{money(totalPaidCny)}<span className="ml-1 text-xs font-normal text-slate-400">CNY</span>
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs text-slate-400 dark:text-slate-500">总收款</p>
+            <p className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              ¥{money(totalReceivedCny)}<span className="ml-1 text-xs font-normal text-slate-400">CNY</span>
+            </p>
+          </div>
+          <div className="card p-4">
+            <p className="text-xs text-slate-400 dark:text-slate-500">差额（收款 − 实付）</p>
+            <p className={`mt-1.5 text-2xl font-bold tracking-tight ${diffCny >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+              ¥{money(diffCny)}<span className="ml-1 text-xs font-normal text-slate-400">CNY</span>
             </p>
           </div>
           {hasAuto && (
