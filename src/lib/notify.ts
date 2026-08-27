@@ -109,6 +109,51 @@ export async function sendTelegram(
   }
 }
 
+/**
+ * 给指定客户发一条测试推送，用于验证配置是否可用。
+ * 与正式推送的区别：不判断是否到期、不写 NotifyLog（不影响当天去重）、
+ * 不要求推送总开关已启用（方便先测通再启用），但仍需 Token 与站点地址。
+ * 文案带「测试消息」前缀，避免客户误以为真的到期。
+ */
+export async function sendTestNotify(customerId: string): Promise<{
+  ok: boolean;
+  error?: string;
+  customer?: string;
+  sent: number;
+  failed: number;
+  errors: string[];
+}> {
+  const fail = (error: string) => ({ ok: false, error, sent: 0, failed: 0, errors: [] });
+
+  const setting = await prisma.notifySetting.findUnique({ where: { id: "default" } });
+  if (!setting?.botToken) return fail("未配置 Bot Token，请先到设置页填写并保存");
+  if (!setting.siteBaseUrl) return fail("未配置站点地址，请先到设置页填写并保存");
+
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+  if (!customer) return fail("客户不存在");
+
+  // 该客户专属收件人 + 全局收件人，按 chat_id 去重
+  const list = await prisma.notifyRecipient.findMany({
+    where: { enabled: true, OR: [{ customerId }, { customerId: null }] },
+  });
+  const seen = new Set<string>();
+  const recipients = list.filter((r) => (seen.has(r.chatId) ? false : (seen.add(r.chatId), true)));
+  if (recipients.length === 0) {
+    return fail("该客户没有启用的收件人，也没有全局收件人");
+  }
+
+  const text = `【测试消息】${buildMessage(customerViewUrl(setting.siteBaseUrl, customerId))}`;
+  let sent = 0;
+  const errors: string[] = [];
+  for (const r of recipients) {
+    const res = await sendTelegram(setting.botToken, r.chatId, text);
+    if (res.ok) sent++;
+    else errors.push(`${r.chatId}: ${res.error}`);
+  }
+
+  return { ok: sent > 0, customer: customer.name, sent, failed: errors.length, errors };
+}
+
 export type NotifyRunResult = {
   ok: boolean;
   /** 未执行时的原因（未启用 / 缺配置 / 无收件人 / 无到期客户） */

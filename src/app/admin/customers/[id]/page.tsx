@@ -9,6 +9,7 @@ import PaymentManager from "./PaymentManager";
 import RechargeManager from "./RechargeManager";
 import ShareLink from "./ShareLink";
 import RecipientManager from "@/app/admin/settings/RecipientManager";
+import TestPushButton from "./TestPushButton";
 import CustomerEditor from "./CustomerEditor";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +130,13 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
           页里的全局收件人会收到所有客户的提醒。
         </p>
         <RecipientManager customerId={customer.id} recipients={customer.notifyTo} />
+        <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
+          <p className="mb-2 text-xs text-slate-400 dark:text-slate-500">
+            立即给上面的收件人（含全局收件人）发一条测试消息，验证 Bot Token、站点地址与 chat_id 是否配好。
+            测试不判断是否真的到期，也不影响当天的正式推送。
+          </p>
+          <TestPushButton customerId={customer.id} />
+        </div>
       </section>
 
       {/* VPS 列表 */}

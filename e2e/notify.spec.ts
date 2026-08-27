@@ -105,6 +105,16 @@ test.describe("客户专属收件人", () => {
     const mine = await mineRes.json();
     expect(mine.some((r: any) => r.chatId === chatId)).toBe(true);
 
+    // 「发送测试推送」在缺配置时给出明确提示，而不是静默失败。
+    // 先显式清空 Bot Token，确保这里走的是校验分支而非真的请求 Telegram。
+    const cleared = await page.request.put("/api/admin/notify-settings", {
+      data: { enabled: false, botToken: "", siteBaseUrl: "", daysAhead: 5 },
+    });
+    expect(cleared.ok()).toBeTruthy();
+    await page.reload();
+    await page.getByRole("button", { name: "发送测试推送" }).click();
+    await expect(page.getByText("未配置 Bot Token，请先到设置页填写并保存")).toBeVisible();
+
     // 设置页「各客户收件人」概览能看到
     await page.goto("/admin/settings");
     const overview = page.locator("tr", { hasText: cname });
