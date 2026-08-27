@@ -162,6 +162,81 @@
 - `PATCH /api/admin/recharges/{id}` — 编辑 `{ amountUsd, paidCny?, balanceAfter?, rechargeDate?, note?, paymentProof? }`（rechargeDate 省略沿用原值；不存在返回 `404`）
 - `DELETE /api/admin/recharges/{id}` — 删除充值记录
 
+## 管理 — 到期推送设置
+
+- `GET /api/admin/notify-settings` — 读取设置。未初始化时返回默认值 `{ id:"default", enabled:false, botToken:null, daysAhead:5, siteBaseUrl:null }`（不落库）。
+- `PUT /api/admin/notify-settings` — 保存 `{ enabled, botToken?, daysAhead, siteBaseUrl? }`（单例 upsert）。校验：
+  - `daysAhead` 需在 `1~365`，否则 `400`
+  - `siteBaseUrl` 需以 `http://` 或 `https://` 开头，否则 `400`
+  - `enabled=true` 时 `botToken` 与 `siteBaseUrl` 必填，否则 `400`（避免启用后 cron 静默跳过）
+
+## 管理 — 推送收件人
+
+- `GET /api/admin/notify-recipients` — 列表。`?customerId={id}` 取该客户专属收件人；`?customerId=global` 取全局收件人；不传取全部。
+- `POST /api/admin/notify-recipients` — 新增 `{ chatId, label?, customerId?, enabled? }`。
+  - 带 `customerId` = 该客户专属收件人（只收自己服务器的到期提醒）；不带 = 全局收件人（收所有客户的提醒）
+  - `chatId` 必须匹配 `^-?\d+$`（群组为负数），否则 `400`；同一归属下重复返回 `400`；`customerId` 指向不存在的客户返回 `400`
+- `PATCH /api/admin/notify-recipients/{id}` — 编辑 `{ label?, enabled? }`（不存在返回 `404`）
+- `DELETE /api/admin/notify-recipients/{id}` — 删除（不存在返回 `404`）
+
+## 管理 — 手动触发推送
+
+### POST `/api/admin/notify-test`
+
+一个端点两种用途，按有无 `customerId` 区分：
+
+- **不带 body / 不带 `customerId`**（设置页「立即检查并推送」）：走 `runExpiryNotify({ force: true })`，正常判定到期客户，**忽略当天去重**并覆盖当天的 `NotifyLog`。返回体同下方 cron 端点。
+- **带 `{ customerId }`**（客户详情页「发送测试推送」）：走 `sendTestNotify(customerId)`，直接给该客户发一条测试消息。
+  - **不判断是否真的到期**，**不写 `NotifyLog`**（不影响当天正式推送的去重），**不要求推送总开关已启用**（方便先测通再启用），但仍需已配置 Bot Token 与站点地址。
+  - 收件人 = 该客户专属 + 全局，按 chat_id 去重。
+  - 文案带 `【测试消息】` 前缀，避免客户误以为真的到期。
+  - 缺配置/客户不存在/无收件人时返回 `400` 与明确的 `error` 文案。
+
+  ```jsonc
+  // 200
+  { "ok": true, "customer": "客户A", "sent": 2, "failed": 0, "errors": [] }
+  // 400
+  { "ok": false, "error": "未配置 Bot Token，请先到设置页填写并保存", "sent": 0, "failed": 0, "errors": [] }
+  ```
+
+## 定时任务 — 到期推送
+
+### GET/POST `/api/cron/expiry-notify`
+
+**不在 middleware 保护范围内**（middleware 只匹配 `/admin/**` 与 `/api/admin/**`），由服务器 crontab 调用，凭 `CRON_SECRET` 自行鉴权。
+
+| 情况 | 响应 |
+| --- | --- |
+| 未配置 `CRON_SECRET` 环境变量 | `503 {"error":"未配置 CRON_SECRET，端点已禁用"}` |
+| secret 不匹配 | `401 {"error":"未授权"}` |
+| 通过 | `200` + 执行结果 |
+
+凭证可放请求头 `X-Cron-Secret: xxx` 或查询串 `?secret=xxx`。
+
+执行结果结构：
+
+```jsonc
+{
+  "ok": true,
+  "skipped": "推送未启用",           // 仅未执行时出现（未启用/缺配置/无收件人/无到期客户/当天已推）
+  "customers": 2,                    // 实际推送的客户数
+  "sent": 3,                         // 成功送达的消息数
+  "failed": 0,
+  "results": [
+    { "customer": "客户A", "detail": "香港-01 剩 3 天", "sent": 2, "failed": 0 }
+  ]
+}
+```
+
+**推送规则**（实现见 `src/lib/notify.ts`）：
+
+- 判定：`term` 用 `daysUntil(expiryDate) <= daysAhead`（已过期为负数，同样提醒）；`auto` 用 `estimateSharedBalance()` 的 `daysRemaining <= daysAhead`。同客户多台 auto 共享同一耗尽日，只算一次。
+- 收件人：**该客户专属收件人 + 全局收件人**，同一 chat_id 只发一次；该客户既无专属收件人也无全局收件人时跳过。
+- 消息文案：`您有服务器即将到期，详情查看{siteBaseUrl}/view/{customerId}，请确认并及时支付账单续费处理`
+- 按客户合并：一个客户一条消息，无论名下几台服务器到期。
+- 去重：同一客户同一天只推一次（`NotifyLog` 的 `@@unique([customerId, notifyDate])`）。
+- 送达：逐个 chat_id 串行调 `https://api.telegram.org/bot{token}/sendMessage`，10s 超时；单个失败不影响其余，错误汇总写入 `NotifyLog.error`。
+
 ## 字段校验规则（`src/lib/validate.ts`）
 
 | 规则 | 说明 |
