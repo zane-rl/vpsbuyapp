@@ -26,6 +26,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link href="/admin/providers" className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
                 提供商
               </Link>
+              <Link href="/admin/settings" className="rounded-md px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                设置
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">

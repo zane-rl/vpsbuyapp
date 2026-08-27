@@ -17,13 +17,16 @@ if [ ! -f .env ]; then
     ADMIN_PASSWORD="admin123"
   fi
   SECRET="$(openssl rand -hex 32 2>/dev/null || head -c32 /dev/urandom | xxd -p | tr -d '\n')"
+  CRON="$(openssl rand -hex 16 2>/dev/null || head -c16 /dev/urandom | xxd -p | tr -d '\n')"
   cat > .env <<EOF
 DATABASE_URL="file:./${DB_FILE}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD}"
 SESSION_SECRET="${SECRET}"
 PORT=${PORT}
+CRON_SECRET="${CRON}"
 EOF
   echo "✅ 已生成 .env（PORT=${PORT}）"
+  echo "   到期推送的 CRON_SECRET 已随机生成，配置定时任务时从 .env 中查看"
 else
   echo "ℹ️  .env 已存在，跳过生成"
 fi

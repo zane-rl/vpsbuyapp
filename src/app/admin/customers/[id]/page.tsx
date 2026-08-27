@@ -8,6 +8,7 @@ import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import PaymentManager from "./PaymentManager";
 import RechargeManager from "./RechargeManager";
 import ShareLink from "./ShareLink";
+import RecipientManager from "@/app/admin/settings/RecipientManager";
 import CustomerEditor from "./CustomerEditor";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
       },
       payments: { orderBy: { payDate: "desc" } },
       recharges: { orderBy: { rechargeDate: "desc" } },
+      notifyTo: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -116,6 +118,17 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
           可分享给该客户，无需登录即可查看其名下所有 VPS、购买成本/实付及合计。
         </p>
         <ShareLink path={`/view/${customer.id}`} />
+      </section>
+
+      {/* 该客户的到期提醒收件人 */}
+      <section className="card p-5">
+        <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">到期提醒收件人</h2>
+        <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
+          该客户的服务器即将到期时，会向下列 Telegram chat_id 推送提醒并附上其专属查看链接。
+          仅对本客户生效；<Link href="/admin/settings" className="text-indigo-600 hover:underline dark:text-indigo-400">设置</Link>
+          页里的全局收件人会收到所有客户的提醒。
+        </p>
+        <RecipientManager customerId={customer.id} recipients={customer.notifyTo} />
       </section>
 
       {/* VPS 列表 */}
