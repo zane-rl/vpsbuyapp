@@ -4,6 +4,7 @@ import { formatDate, vpsValidity } from "@/lib/dates";
 import { cycleLabel, money } from "@/lib/money";
 import { estimateSharedBalance } from "@/lib/billing";
 import BalanceEstimateLine from "@/app/BalanceEstimateLine";
+import ProofThumb from "@/app/ProofThumb";
 import ThemeToggle from "../../ThemeToggle";
 import CopyButton from "../../CopyButton";
 
@@ -17,12 +18,12 @@ export default async function CustomerPublicPage({ params }: { params: { custome
         include: {
           provider: true,
           vpnNodes: { where: { enabled: true }, orderBy: { createdAt: "asc" } },
-          renewals: { select: { costUsd: true, paidCny: true } },
+          renewals: { orderBy: { renewDate: "desc" } },
         },
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
       recharges: { orderBy: { rechargeDate: "desc" } },
-      payments: { select: { amountCny: true } },
+      payments: { orderBy: { payDate: "desc" } },
     },
   });
 
@@ -44,6 +45,64 @@ export default async function CustomerPublicPage({ params }: { params: { custome
     rechargePaidCny;
   const totalReceivedCny = customer.payments.reduce((s, p) => s + p.amountCny, 0);
   const diffCny = totalReceivedCny - totalPaidCny;
+
+  // 付款记录：各台 VPS 的购买 + 每次续费 + 客户充值，汇总成一张台账，按日期倒序。
+  // 与顶部「总实际付款」同口径，便于和右侧收款记录逐笔对照。
+  type PayRow = {
+    key: string;
+    date: Date;
+    target: string;
+    kind: string;
+    costUsd: number;
+    paidCny: number;
+    proof: string | null;
+    note: string | null;
+  };
+  const payRows: PayRow[] = [];
+  for (const v of list) {
+    payRows.push({
+      key: `v-${v.id}`,
+      date: v.purchaseDate,
+      target: v.name,
+      kind: "购买",
+      costUsd: v.purchaseCostUsd,
+      paidCny: v.purchasePaidCny,
+      proof: v.paymentProof,
+      note: null,
+    });
+    for (const r of v.renewals) {
+      payRows.push({
+        key: `r-${r.id}`,
+        date: r.renewDate,
+        target: v.name,
+        kind: "续费",
+        costUsd: r.costUsd,
+        paidCny: r.paidCny,
+        proof: r.paymentProof,
+        note: r.notes ? r.notes : `续至 ${formatDate(r.newExpiry)}`,
+      });
+    }
+  }
+  for (const rc of customer.recharges) {
+    payRows.push({
+      key: `c-${rc.id}`,
+      date: rc.rechargeDate,
+      target: "自动续费余额",
+      kind: "充值",
+      costUsd: rc.amountUsd,
+      paidCny: rc.paidCny,
+      proof: rc.paymentProof,
+      note: rc.note,
+    });
+  }
+  payRows.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  const kindClass = (kind: string) =>
+    kind === "购买"
+      ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400"
+      : kind === "续费"
+        ? "bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+        : "bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400";
 
   return (
     <main className="app-bg min-h-screen">
@@ -101,6 +160,129 @@ export default async function CustomerPublicPage({ params }: { params: { custome
           )}
         </section>
 
+        {/* 付款记录 与 收款记录：左右并排，方便逐笔对照 */}
+        <section className="mb-6 grid gap-4 lg:grid-cols-2">
+          {/* 付款记录（支出）*/}
+          <div className="card p-5">
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">付款记录</h2>
+              <span className="text-xs text-slate-400 dark:text-slate-500">服务器购买 · 续费 · 余额充值</span>
+            </div>
+            {payRows.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">暂无付款记录</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="table-head">
+                      <th className="py-2 pr-3">时间</th>
+                      <th className="py-2 pr-3">项目</th>
+                      <th className="py-2 pr-3 text-right">成本 $</th>
+                      <th className="py-2 pr-3 text-right">实付 ¥</th>
+                      <th className="py-2">截图</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payRows.map((r) => (
+                      <tr key={r.key} className="table-row">
+                        <td className="py-2.5 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {formatDate(r.date)}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${kindClass(r.kind)}`}>
+                              {r.kind}
+                            </span>
+                            <span className="font-medium text-slate-700 dark:text-slate-200">{r.target}</span>
+                          </div>
+                          {r.note && (
+                            <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">{r.note}</p>
+                          )}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                          ${money(r.costUsd)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right tabular-nums font-medium text-slate-700 dark:text-slate-200">
+                          ¥{money(r.paidCny)}
+                        </td>
+                        <td className="py-2.5">
+                          <ProofThumb proof={r.proof} alt={`${r.target}${r.kind}付款截图`} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={3} className="pt-3 text-xs text-slate-400 dark:text-slate-500">
+                        共 {payRows.length} 笔，购买服务器总开销
+                      </td>
+                      <td className="pt-3 pr-3 text-right text-base font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                        ¥{money(totalPaidCny)}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* 收款记录（客户已付给我方）*/}
+          <div className="card p-5">
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">收款记录</h2>
+              <span className="text-xs text-slate-400 dark:text-slate-500">您已支付的款项</span>
+            </div>
+            {customer.payments.length === 0 ? (
+              <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">暂无收款记录</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="table-head">
+                      <th className="py-2 pr-3">收款时间</th>
+                      <th className="py-2 pr-3 text-right">金额 ¥</th>
+                      <th className="py-2 pr-3">备注</th>
+                      <th className="py-2">截图</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customer.payments.map((p) => (
+                      <tr key={p.id} className="table-row">
+                        <td className="py-2.5 pr-3 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {formatDate(p.payDate)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right tabular-nums font-medium text-emerald-600 dark:text-emerald-400">
+                          ¥{money(p.amountCny)}
+                        </td>
+                        <td className="py-2.5 pr-3 text-slate-400 dark:text-slate-500">{p.note || "-"}</td>
+                        <td className="py-2.5">
+                          <ProofThumb proof={p.paymentProof} alt="收款截图" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td className="pt-3 text-xs text-slate-400 dark:text-slate-500">
+                        共 {customer.payments.length} 笔，合计
+                      </td>
+                      <td className="pt-3 pr-3 text-right text-base font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                        ¥{money(totalReceivedCny)}
+                      </td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+            <p className={`mt-3 rounded-lg px-3 py-2 text-sm ${diffCny >= 0 ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400"}`}>
+              收款 ¥{money(totalReceivedCny)} − 实付 ¥{money(totalPaidCny)} ={" "}
+              <span className="font-bold">¥{money(diffCny)}</span>
+            </p>
+          </div>
+        </section>
+
         {list.length === 0 ? (
           <div className="card border-dashed p-16 text-center text-slate-400">该客户暂无 VPS 记录</div>
         ) : (
@@ -109,6 +291,7 @@ export default async function CustomerPublicPage({ params }: { params: { custome
               const va = vpsValidity(vps);
               const isAuto = vps.billingType === "auto";
               const specs = [vps.cpu, vps.ram, vps.disk].filter(Boolean).join(" · ");
+              const renewPaidCny = vps.renewals.reduce((s, r) => s + r.paidCny, 0);
               return (
                 <article key={vps.id} className="card card-hover animate-fade-in p-5">
                   <div className="flex items-start justify-between gap-2">
@@ -158,23 +341,14 @@ export default async function CustomerPublicPage({ params }: { params: { custome
                       <dd className="font-medium text-slate-700 dark:text-slate-200">${money(vps.purchaseCostUsd)}</dd>
                     </div>
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
-                      <dt className="text-xs text-slate-400 dark:text-slate-500">实际付款</dt>
-                      <dd className="font-medium text-slate-700 dark:text-slate-200">¥{money(vps.purchasePaidCny)}</dd>
+                      <dt className="text-xs text-slate-400 dark:text-slate-500">
+                        实际付款{vps.renewals.length > 0 ? `（含 ${vps.renewals.length} 次续费）` : ""}
+                      </dt>
+                      <dd className="font-medium text-slate-700 dark:text-slate-200">
+                        ¥{money(vps.purchasePaidCny + renewPaidCny)}
+                      </dd>
                     </div>
                   </dl>
-
-                  {vps.paymentProof && (
-                    <div className="mt-3">
-                      <p className="mb-1.5 text-xs font-medium text-slate-400 dark:text-slate-500">付款截图</p>
-                      <a href={`/api/files/${vps.paymentProof}`} target="_blank" rel="noreferrer">
-                        <img
-                          src={`/api/files/${vps.paymentProof}`}
-                          alt="付款截图"
-                          className="h-24 w-full rounded-lg border border-slate-200 object-cover dark:border-slate-700"
-                        />
-                      </a>
-                    </div>
-                  )}
 
                   {vps.vpnNodes.length > 0 && (
                     <div className="mt-4 border-t border-slate-100 pt-3 dark:border-slate-800">
