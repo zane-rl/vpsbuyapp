@@ -59,7 +59,7 @@ npx playwright install chromium    # 首次需装浏览器内核
   - 总实付(CNY) = VPS 实付 + 续费实付 + 充值 `paidCny`
   - 总收款(CNY) = `CustomerPayment.amountCny` 之和；**差额 = 总收款 − 总实付**（正绿负红）
 - **已弃用但保留的模型**：`VpsBalanceLog` 与 `VpsServer.balanceAmount`（余额已改客户级）。保留是为了不重建线上表，**应用层不要再引用**。
-- **到期推送**（`src/lib/notify.ts`）：判定复用 `daysUntil()`（term）与 `estimateSharedBalance().daysRemaining`（auto），**不要另写时间/余额计算**。收件人两层：`NotifyRecipient.customerId` 有值 = 客户专属（客户详情页配置），为空 = 全局（设置页配置）；推送取「客户专属 + 全局」按 chat_id 去重。按客户合并成一条消息。去重靠 `NotifyLog` 的 `@@unique([customerId, notifyDate])`，后台手动触发传 `force` 走 upsert 覆盖。Bot Token / 提前天数 / **站点地址**都在 `NotifySetting` 单例行里 —— 站点地址必须显式配，因为 cron 从 localhost 调用取不到公网域名。`POST /api/admin/notify-test` 一个端点两用：带 `customerId` 走 `sendTestNotify`（客户详情页的测试按钮，不判到期、不写 `NotifyLog`、不要求总开关启用），不带则走 `runExpiryNotify({force:true})`。
+- **到期推送**（`src/lib/notify.ts`）：判定复用 `daysUntil()`（term）与 `estimateSharedBalance().daysRemaining`（auto），**不要另写时间/余额计算**。收件人两层：`NotifyRecipient.customerId` 有值 = 客户专属（客户详情页配置），为空 = 全局（设置页配置）；推送取「客户专属 + 全局」按 chat_id 去重。按客户合并成一条消息。去重靠 `NotifyLog` 的 `@@unique([customerId, notifyDate])`，后台手动触发传 `force` 走 upsert 覆盖。Bot Token / 提前天数 / **站点地址**都在 `NotifySetting` 单例行里 —— 站点地址必须显式配，因为 cron 从 localhost 调用取不到公网域名。消息以 `parse_mode=HTML` 发送、链接必须包在 `<a href>` 里 —— 纯文本时 Telegram 会把 URL 后面的中文标点和文字一起算进链接。`POST /api/admin/notify-test` 一个端点两用：带 `customerId` 走 `sendTestNotify`（客户详情页的测试按钮，不判到期、不写 `NotifyLog`、不要求总开关启用），不带则走 `runExpiryNotify({force:true})`。
 
 ## E2E 注意事项
 

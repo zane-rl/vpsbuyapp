@@ -232,7 +232,9 @@
 
 - 判定：`term` 用 `daysUntil(expiryDate) <= daysAhead`（已过期为负数，同样提醒）；`auto` 用 `estimateSharedBalance()` 的 `daysRemaining <= daysAhead`。同客户多台 auto 共享同一耗尽日，只算一次。
 - 收件人：**该客户专属收件人 + 全局收件人**，同一 chat_id 只发一次；该客户既无专属收件人也无全局收件人时跳过。
-- 消息文案：`您有服务器即将到期，详情查看{siteBaseUrl}/view/{customerId}，请确认并及时支付账单续费处理`
+- 消息文案：`您有服务器即将到期，详情查看{链接}，请确认并及时支付账单续费处理`。
+  以 `parse_mode=HTML` 发送，链接包在 `<a href="…">…</a>` 里并关掉了预览（`disable_web_page_preview`）。
+  **不能发纯文本**：Telegram 的自动链接识别遇到中文全角逗号不截断，会把 URL 后面的「，请确认并及时…」一起吞进链接，客户点开打不开。文本里的 `& < >` 需转义（`buildMessage` 已处理）。
 - 按客户合并：一个客户一条消息，无论名下几台服务器到期。
 - 去重：同一客户同一天只推一次（`NotifyLog` 的 `@@unique([customerId, notifyDate])`）。
 - 送达：逐个 chat_id 串行调 `https://api.telegram.org/bot{token}/sendMessage`，10s 超时；单个失败不影响其余，错误汇总写入 `NotifyLog.error`。
