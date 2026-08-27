@@ -7,7 +7,7 @@ import { estimateSharedBalance, type SharedBalanceEstimate } from "@/lib/billing
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const [list, vpsAgg, renewAgg, payAgg, rechargeAgg, customers] = await Promise.all([
+  const [list, vpsAgg, renewAgg, payAgg, rechargeAgg, customers, notifySetting] = await Promise.all([
     prisma.vpsServer.findMany({
       orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       include: {
@@ -28,7 +28,12 @@ export default async function AdminDashboard() {
         recharges: { select: { amountUsd: true, paidCny: true, balanceAfter: true, rechargeDate: true } },
       },
     }),
+    prisma.notifySetting.findUnique({ where: { id: "default" } }),
   ]);
+
+  // 到期推送是否已配好（缺 Token 或站点地址时，cron 只会静默跳过）
+  const notifyReady =
+    notifySetting?.enabled === true && !!notifySetting.botToken && !!notifySetting.siteBaseUrl;
 
   const totalCostUsd = (vpsAgg._sum.purchaseCostUsd ?? 0) + (renewAgg._sum.costUsd ?? 0) + (rechargeAgg._sum.amountUsd ?? 0);
   const totalPaidCny = (vpsAgg._sum.purchasePaidCny ?? 0) + (renewAgg._sum.paidCny ?? 0) + (rechargeAgg._sum.paidCny ?? 0);
@@ -85,7 +90,23 @@ export default async function AdminDashboard() {
             )}
           </p>
         </div>
+        <Link href="/admin/settings" className="btn-secondary shrink-0">
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${notifyReady ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`}
+          />
+          到期推送{notifyReady ? "已开启" : "未开启"}
+        </Link>
       </div>
+
+      {!notifyReady && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+          还没配置服务器到期提醒。到
+          <Link href="/admin/settings" className="mx-1 font-medium underline underline-offset-2">
+            设置
+          </Link>
+          填好 Telegram Bot Token 与站点地址并启用，再到各客户详情页配置其 chat_id，即可在服务器临近到期时自动推送提醒。
+        </div>
+      )}
 
       {/* 财务汇总 */}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

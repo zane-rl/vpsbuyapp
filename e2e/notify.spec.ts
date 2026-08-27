@@ -8,11 +8,15 @@ async function autoAcceptDialogs(page: Page) {
 // 注意：这些用例不会真的调用 Telegram —— 收件人用假 chat_id，且推送保持「未启用」状态，
 // 手动触发只验证配置校验路径，避免 E2E 依赖外网。
 test.describe("到期推送设置", () => {
-  test("保存设置 → 新增收件人 → 停用/启用 → 删除", async ({ page }) => {
+  test("概览页有到期推送入口 → 保存设置 → 新增收件人 → 停用/启用 → 删除", async ({ page }) => {
     await autoAcceptDialogs(page);
     await login(page);
 
-    await page.getByRole("link", { name: "设置", exact: true }).click();
+    // 概览页的推送状态入口（窄屏没有顶部导航时也能进设置）
+    await expect(page.getByRole("link", { name: /到期推送(已|未)开启/ })).toBeVisible();
+
+    // 概览页正文也有「设置」入口链接，这里限定用顶部导航栏那个
+    await page.locator("header").getByRole("link", { name: "设置", exact: true }).click();
     await page.waitForURL("**/admin/settings");
     await expect(page.getByRole("heading", { name: "Telegram 到期推送" })).toBeVisible();
 
