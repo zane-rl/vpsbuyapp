@@ -5,9 +5,20 @@ import { prisma } from "./db";
 import { daysUntil } from "./dates";
 import { estimateSharedBalance } from "./billing";
 
-/** 推送文案（需求指定原文，仅替换客户专属查看链接） */
+/** Telegram HTML parse_mode 下必须转义的字符 */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * 推送文案（需求指定原文，仅替换客户专属查看链接）。
+ * 链接用 <a> 标签显式界定边界：Telegram 的自动链接识别遇到中文全角逗号不会截断，
+ * 纯文本会把 URL 后面的「，请确认并及时…」一起吞进链接导致点开打不开。
+ * 消息以 parse_mode=HTML 发送，见 sendTelegram。
+ */
 export function buildMessage(viewUrl: string): string {
-  return `您有服务器即将到期，详情查看${viewUrl}，请确认并及时支付账单续费处理`;
+  const safe = escapeHtml(viewUrl);
+  return `您有服务器即将到期，详情查看<a href="${safe}">${safe}</a>，请确认并及时支付账单续费处理`;
 }
 
 /** 拼客户专属查看链接的绝对 URL（去掉站点地址结尾多余的 /） */
@@ -86,7 +97,10 @@ export async function findExpiringCustomers(
   return result;
 }
 
-/** 调 Telegram Bot API sendMessage。失败返回错误文本而非抛出，避免一个 chat_id 拖垮整轮推送。 */
+/**
+ * 调 Telegram Bot API sendMessage。失败返回错误文本而非抛出，避免一个 chat_id 拖垮整轮推送。
+ * 以 parse_mode=HTML 发送，所以 text 必须是 HTML 安全的（见 buildMessage 的 escapeHtml）。
+ */
 export async function sendTelegram(
   botToken: string,
   chatId: string,
@@ -96,7 +110,13 @@ export async function sendTelegram(
     const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        // 关掉链接预览，避免客户端为专属页面拉一张大预览图
+        disable_web_page_preview: true,
+      }),
       signal: AbortSignal.timeout(10_000),
     });
     const data: any = await res.json().catch(() => ({}));
