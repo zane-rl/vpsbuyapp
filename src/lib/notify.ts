@@ -21,9 +21,14 @@ export function buildMessage(viewUrl: string): string {
   return `您有服务器即将到期，详情查看<a href="${safe}">${safe}</a>，请确认并及时支付账单续费处理`;
 }
 
-/** 拼客户专属查看链接的绝对 URL（去掉站点地址结尾多余的 /） */
-export function customerViewUrl(siteBaseUrl: string, customerId: string): string {
-  return `${siteBaseUrl.replace(/\/+$/, "")}/view/${customerId}`;
+/** 拼客户门户链接的绝对 URL（去掉站点地址结尾多余的 /） */
+export function customerViewUrl(siteBaseUrl: string): string {
+  return `${siteBaseUrl.replace(/\/+$/, "")}/customer`;
+}
+
+/** 拼管理员客户详情链接。 */
+export function adminCustomerUrl(siteBaseUrl: string, customerId: string): string {
+  return `${siteBaseUrl.replace(/\/+$/, "")}/admin/customers/${customerId}`;
 }
 
 /** 归零到当天 00:00，作为去重键 */
@@ -63,7 +68,7 @@ export async function findExpiringCustomers(
 
     // term：逐台判断剩余天数
     const termHits = c.vpsServers.filter(
-      (v) => v.billingType !== "auto" && v.expiryDate != null && daysUntil(v.expiryDate) <= daysAhead
+      (v) => v.status === "active" && v.billingType !== "auto" && v.expiryDate != null && daysUntil(v.expiryDate) <= daysAhead
     );
     for (const v of termHits) {
       const d = daysUntil(v.expiryDate!);
@@ -162,10 +167,13 @@ export async function sendTestNotify(customerId: string): Promise<{
     return fail("该客户没有启用的收件人，也没有全局收件人");
   }
 
-  const text = `【测试消息】${buildMessage(customerViewUrl(setting.siteBaseUrl, customerId))}`;
   let sent = 0;
   const errors: string[] = [];
   for (const r of recipients) {
+    const url = r.customerId == null
+      ? adminCustomerUrl(setting.siteBaseUrl, customerId)
+      : customerViewUrl(setting.siteBaseUrl);
+    const text = `【测试消息】${buildMessage(url)}`;
     const res = await sendTelegram(setting.botToken, r.chatId, text);
     if (res.ok) sent++;
     else errors.push(`${r.chatId}: ${res.error}`);
@@ -240,11 +248,14 @@ export async function runExpiryNotify(opts?: { force?: boolean }): Promise<Notif
     const recipients = targets.filter((r) => (seen.has(r.chatId) ? false : (seen.add(r.chatId), true)));
     if (recipients.length === 0) continue; // 该客户没配收件人，也没有全局收件人
 
-    const text = buildMessage(customerViewUrl(setting.siteBaseUrl, c.customerId));
     let sent = 0;
     const errors: string[] = [];
 
     for (const r of recipients) {
+      const url = r.customerId == null
+        ? adminCustomerUrl(setting.siteBaseUrl, c.customerId)
+        : customerViewUrl(setting.siteBaseUrl);
+      const text = buildMessage(url);
       const res = await sendTelegram(setting.botToken, r.chatId, text);
       if (res.ok) sent++;
       else errors.push(`${r.chatId}: ${res.error}`);

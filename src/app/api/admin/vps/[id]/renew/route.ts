@@ -16,6 +16,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const vps = await prisma.vpsServer.findUnique({ where: { id: params.id } });
   if (!vps) return NextResponse.json({ error: "未找到该 VPS" }, { status: 404 });
 
+  if (vps.status === "stopped") {
+    return NextResponse.json({ error: "已永久下线的服务器不能续费" }, { status: 409 });
+  }
+
   if (vps.billingType !== "term" || !vps.expiryDate) {
     return NextResponse.json(
       { error: "自动续费类型无固定到期，请使用「更新余额/充值」" },
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }),
     prisma.vpsServer.update({
       where: { id: vps.id },
-      data: { expiryDate: newExpiry, status: "active" },
+      data: { expiryDate: newExpiry },
     }),
   ]);
 

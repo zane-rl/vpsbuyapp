@@ -26,8 +26,8 @@ test.describe("提供商管理", () => {
   });
 });
 
-test.describe("客户结算 + 公开页", () => {
-  test("新增客户 → 记收款 → 差额更新 → 公开页显示合计 → 删除", async ({ page }) => {
+test.describe("客户结算 + 客户账号入口", () => {
+  test("新增客户 → 记收款 → 差额更新 → 公开链接关闭 → 删除", async ({ page }) => {
     await autoAcceptDialogs(page);
     await login(page);
 
@@ -39,10 +39,10 @@ test.describe("客户结算 + 公开页", () => {
     await addForm.getByPlaceholder("客户名称").fill(cname);
     await addForm.getByRole("button", { name: "添加" }).click();
 
-    // 客户列表行内应有「复制 / 打开」专属链接按钮
+    // 新客户默认还没有登录账号，不再提供免登录链接
     const row = page.locator("tr", { hasText: cname });
-    await expect(row.getByRole("button", { name: "复制" })).toBeVisible();
-    await expect(row.getByRole("link", { name: /打开/ })).toBeVisible();
+    await expect(row.getByText("未创建", { exact: true })).toBeVisible();
+    await expect(row.getByRole("button", { name: "复制" })).toHaveCount(0);
 
     // 进入客户详情
     await row.getByRole("link", { name: "管理" }).click();
@@ -86,11 +86,10 @@ test.describe("客户结算 + 公开页", () => {
     await rechModal.getByRole("button", { name: "保存" }).click();
     await expect(page.getByText("¥140.00").first()).toBeVisible();
 
-    // 公开客户页显示合计标题
+    // 旧客户链接不再直接展示数据
     await page.goto(`/view/${customerId}`);
-    await expect(page.getByRole("heading", { name: "VPS 服务清单" })).toBeVisible();
-    await expect(page.getByText("总购买成本")).toBeVisible();
-    await expect(page.getByText("总实际付款")).toBeVisible();
+    await page.waitForURL("**/customer/login");
+    await expect(page.getByRole("heading", { name: "客户登录" })).toBeVisible();
 
     // 清理：删除客户
     await page.goto(customerUrl);

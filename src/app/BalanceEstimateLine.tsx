@@ -17,7 +17,9 @@ export default function BalanceEstimateLine({
   let text: string;
   let tone = "text-slate-400 dark:text-slate-500";
 
-  if (est.depleted) {
+  if (!est.hasActiveAuto) {
+    text = "无运行中的自动续费服务器，不再估算可用时间";
+  } else if (est.depleted) {
     text = "余额已耗尽";
     tone = "text-red-600 dark:text-red-400";
   } else if (!est.hasRecharge) {

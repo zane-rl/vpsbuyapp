@@ -66,7 +66,7 @@ function NodeRow({ node, onChanged }: { node: Node; onChanged: () => void }) {
         <input className={`${inputCls} mt-2`} value={form.subscribeUrl ?? ""} onChange={(e) => setForm({ ...form, subscribeUrl: e.target.value })} placeholder="订阅链接" />
         <label className="mt-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
           <input type="checkbox" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} className="accent-indigo-600" />
-          启用（公开页展示）
+          启用（客户门户展示并允许分配）
         </label>
         <div className="mt-2 flex gap-2">
           <button onClick={save} disabled={busy} className="btn-primary px-3 py-1.5">保存</button>

@@ -10,6 +10,7 @@ import NodeManager from "./NodeManager";
 import { cycleLabel, money } from "@/lib/money";
 import { estimateSharedBalance } from "@/lib/billing";
 import BalanceEstimateLine from "@/app/BalanceEstimateLine";
+import OfflineButton from "./OfflineButton";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
         customer: {
           include: {
             recharges: { orderBy: { rechargeDate: "desc" } },
-            vpsServers: { select: { billingType: true, autoCycle: true, cyclePriceUsd: true, purchaseDate: true } },
+            vpsServers: { select: { billingType: true, autoCycle: true, cyclePriceUsd: true, purchaseDate: true, status: true, stoppedAt: true } },
           },
         },
         renewals: { orderBy: { renewDate: "desc" } },
@@ -95,7 +96,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
       <section className="card p-6">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">续费</h2>
-          <RenewForm vpsId={vps.id} />
+          {vps.status === "active" && <RenewForm vpsId={vps.id} />}
         </div>
 
         {vps.renewals.length === 0 ? (
@@ -143,6 +144,16 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
           </div>
         )}
       </section>
+      )}
+
+      {vps.status === "active" ? (
+        <section className="card border-red-200 p-6 dark:border-red-900/60">
+          <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">服务器下线</h2>
+          <p className="mb-4 mt-2 text-sm text-slate-500 dark:text-slate-400">永久下线后不可恢复。历史财务、续费、节点和用户分配会保留，但不再计算余额消耗或发送到期提醒。</p>
+          <OfflineButton vpsId={vps.id} vpsName={vps.name} />
+        </section>
+      ) : (
+        <section className="card p-5 text-sm text-slate-500 dark:text-slate-400">该服务器已于 {formatDate(vps.stoppedAt)} 永久下线，历史资料仅供查阅。</section>
       )}
 
       {/* VPN 节点 */}

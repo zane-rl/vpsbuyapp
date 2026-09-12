@@ -100,7 +100,7 @@ export default function NotifySettings({ initial }: { initial: Setting }) {
         </div>
 
         <label className="block">
-          <span className="label">站点地址 *（用于拼客户专属查看链接）</span>
+          <span className="label">站点地址 *（用于拼客户门户与管理员详情链接）</span>
           <input
             className="input"
             value={siteBaseUrl}

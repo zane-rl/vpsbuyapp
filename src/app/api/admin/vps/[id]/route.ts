@@ -40,6 +40,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!customerId) return NextResponse.json({ error: "请选择所属客户" }, { status: 400 });
   if (!purchaseDate) return NextResponse.json({ error: "请填写有效的购买时间" }, { status: 400 });
 
+  if (customerId !== existing.customerId) {
+    const assignmentCount = await prisma.vpnNodeAssignment.count({
+      where: { vpnNode: { vpsId: params.id } },
+    });
+    if (assignmentCount > 0) {
+      return NextResponse.json({ error: "该 VPS 仍有节点分配，请先解除全部分配后再改派客户" }, { status: 409 });
+    }
+  }
+
   const billing = parseBilling(body);
   if ("error" in billing) return NextResponse.json({ error: billing.error }, { status: 400 });
 
@@ -61,7 +70,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       purchaseCostUsd: num(body.purchaseCostUsd),
       purchasePaidCny: num(body.purchasePaidCny),
       paymentProof: optStr(body.paymentProof),
-      status: str(body.status) === "stopped" ? "stopped" : "active",
       notes: optStr(body.notes),
     },
   });

@@ -72,6 +72,8 @@ type AutoVps = {
   autoCycle?: string | null;
   cyclePriceUsd?: number | null;
   purchaseDate: Date | string;
+  status?: string | null;
+  stoppedAt?: Date | string | null;
 };
 
 type RechargeLite = {
@@ -82,6 +84,8 @@ type RechargeLite = {
 export type SharedBalanceEstimate = {
   /** 名下是否有自动续费 VPS */
   hasAuto: boolean;
+  /** 名下是否有仍在运行的自动续费 VPS */
+  hasActiveAuto: boolean;
   /** 是否有可用于估算的周期单价（>0） */
   hasPricing: boolean;
   /** 是否已登记过充值（决定有无 base 余额） */
@@ -116,6 +120,8 @@ export function estimateSharedBalance(params: {
 
   const autoList = vpsServers.filter((v) => v.billingType === "auto");
   const hasAuto = autoList.length > 0;
+  const activeAutoList = autoList.filter((v) => v.status !== "stopped");
+  const hasActiveAuto = activeAutoList.length > 0;
 
   // 最近一条充值（recharges 约定按 rechargeDate desc；这里不依赖外部排序，自行求最新）
   let latest: RechargeLite | null = null;
@@ -134,13 +140,15 @@ export function estimateSharedBalance(params: {
     const price = v.cyclePriceUsd ?? 0;
     if (price <= 0) continue;
     const perDay = price / cycleDays(v.autoCycle);
-    dailyBurnUsd += perDay;
+    if (v.status !== "stopped") dailyBurnUsd += perDay;
     // 自 max(充值日, 购买日) 起算消耗；无充值记录则无 base，可估耗尽但 base=0
     const start = since
       ? new Date(Math.max(since.getTime(), toDate(v.purchaseDate).getTime()))
       : toDate(v.purchaseDate);
     // 按整天累计消耗：当天登记余额不立刻扣减，每满一天扣一天（预估，避免登记当天就低于登记值）
-    const days = Math.max(0, Math.floor((now.getTime() - start.getTime()) / MS_PER_DAY));
+    const stop = v.status === "stopped" && v.stoppedAt ? toDate(v.stoppedAt) : now;
+    const end = new Date(Math.min(now.getTime(), stop.getTime()));
+    const days = Math.max(0, Math.floor((end.getTime() - start.getTime()) / MS_PER_DAY));
     consumed += perDay * days;
   }
 
@@ -157,5 +165,5 @@ export function estimateSharedBalance(params: {
     depletionDate = new Date(now.getTime() + remDays * MS_PER_DAY);
   }
 
-  return { hasAuto, hasPricing, hasRecharge, balanceUsd, dailyBurnUsd, depletionDate, daysRemaining, depleted };
+  return { hasAuto, hasActiveAuto, hasPricing, hasRecharge, balanceUsd, dailyBurnUsd, depletionDate, daysRemaining, depleted };
 }

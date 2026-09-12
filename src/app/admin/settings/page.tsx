@@ -46,7 +46,7 @@ export default async function SettingsPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">设置</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          服务器即将到期时，自动向 Telegram 推送提醒，附上该客户的专属查看链接。
+          运行中的服务器即将到期时自动推送提醒：客户收件人进入客户门户，全局收件人进入管理员客户详情。
         </p>
       </div>
 

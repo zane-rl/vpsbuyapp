@@ -7,10 +7,12 @@ import { estimateSharedBalance } from "@/lib/billing";
 import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import PaymentManager from "./PaymentManager";
 import RechargeManager from "./RechargeManager";
-import ShareLink from "./ShareLink";
 import RecipientManager from "@/app/admin/settings/RecipientManager";
 import TestPushButton from "./TestPushButton";
 import CustomerEditor from "./CustomerEditor";
+import CustomerAccountManager from "./CustomerAccountManager";
+import ManagedUserManager from "@/app/ManagedUserManager";
+import { calculateCustomerSettlement } from "@/lib/customerSettlement";
 
 export const dynamic = "force-dynamic";
 
@@ -22,19 +24,23 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         include: {
           provider: true,
           renewals: { select: { costUsd: true, paidCny: true } },
+          vpnNodes: { orderBy: { createdAt: "asc" } },
         },
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
       payments: { orderBy: { payDate: "desc" } },
       recharges: { orderBy: { rechargeDate: "desc" } },
       notifyTo: { orderBy: { createdAt: "asc" } },
+      account: { select: { username: true, enabled: true, mustChangePassword: true, lastLoginAt: true } },
+      managedUsers: {
+        orderBy: [{ enabled: "desc" }, { createdAt: "asc" }],
+        include: { assignments: { orderBy: { assignedAt: "asc" }, include: { vpnNode: { include: { vps: { select: { id: true, name: true, status: true } } } } } } },
+      },
     },
   });
 
   if (!customer) notFound();
 
-  const rechargeCostUsd = customer.recharges.reduce((s, r) => s + r.amountUsd, 0);
-  const rechargePaidCny = customer.recharges.reduce((s, r) => s + r.paidCny, 0);
   // 当前共享余额（估算）：最近一次充值余额 − 名下自动续费 VPS 按周期单价折算的累计消耗
   const balanceEst = estimateSharedBalance({
     recharges: customer.recharges,
@@ -43,18 +49,7 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
   });
   const sharedBalanceUsd = balanceEst.balanceUsd;
 
-  const totalCostUsd =
-    customer.vpsServers.reduce(
-      (s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0),
-      0
-    ) + rechargeCostUsd;
-  const totalPaidCny =
-    customer.vpsServers.reduce(
-      (s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0),
-      0
-    ) + rechargePaidCny;
-  const totalReceivedCny = customer.payments.reduce((s, p) => s + p.amountCny, 0);
-  const diffCny = totalReceivedCny - totalPaidCny;
+  const { totalCostUsd, totalPaidCny, totalReceivedCny, diffCny } = calculateCustomerSettlement(customer);
 
   const payments = customer.payments.map((p) => ({
     id: p.id,
@@ -112,20 +107,31 @@ export default async function CustomerDetailPage({ params }: { params: { id: str
         ))}
       </section>
 
-      {/* 对客户公开链接 */}
+      {/* 客户登录账号 */}
       <section className="card p-5">
-        <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">客户专属查看链接</h2>
+        <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">客户登录账号</h2>
         <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
-          可分享给该客户，无需登录即可查看其名下所有 VPS、购买成本/实付及合计。
+          每个客户一个独立账号。创建或重置后，客户首次登录必须修改初始密码。
         </p>
-        <ShareLink path={`/view/${customer.id}`} />
+        <CustomerAccountManager customerId={customer.id} account={customer.account} />
+      </section>
+
+      {/* 终端用户与节点分配 */}
+      <section className="card p-6">
+        <div className="mb-3"><h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">终端用户与节点分配</h2><p className="mt-1 text-xs text-slate-400 dark:text-slate-500">这些人员档案不能登录系统；管理员和客户都可维护当前分配。</p></div>
+        <ManagedUserManager
+          mode="admin"
+          customerId={customer.id}
+          users={customer.managedUsers}
+          nodes={customer.vpsServers.flatMap((vps) => vps.vpnNodes.map((node) => ({ ...node, vps: { id: vps.id, name: vps.name, status: vps.status } })))}
+        />
       </section>
 
       {/* 该客户的到期提醒收件人 */}
       <section className="card p-5">
         <h2 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">到期提醒收件人</h2>
         <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
-          该客户的服务器即将到期时，会向下列 Telegram chat_id 推送提醒并附上其专属查看链接。
+          该客户的运行中服务器即将到期时，会向下列 Telegram chat_id 推送提醒并附上客户门户链接。
           仅对本客户生效；<Link href="/admin/settings" className="text-indigo-600 hover:underline dark:text-indigo-400">设置</Link>
           页里的全局收件人会收到所有客户的提醒。
         </p>

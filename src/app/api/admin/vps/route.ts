@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
       purchaseCostUsd: num(body.purchaseCostUsd),
       purchasePaidCny: num(body.purchasePaidCny),
       paymentProof: optStr(body.paymentProof),
-      status: str(body.status) === "stopped" ? "stopped" : "active",
       notes: optStr(body.notes),
     },
   });

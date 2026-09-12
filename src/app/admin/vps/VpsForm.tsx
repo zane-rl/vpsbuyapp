@@ -28,7 +28,6 @@ const empty: VpsFormData = {
   purchaseCostUsd: "0",
   purchasePaidCny: "0",
   paymentProof: "",
-  status: "active",
   notes: "",
 };
 
@@ -244,12 +243,6 @@ export default function VpsForm({
             </Field>
           )}
 
-          <Field label="运行状态">
-            <select className={inputCls} value={form.status} onChange={(e) => set("status", e.target.value)}>
-              <option value="active">运行中</option>
-              <option value="stopped">已停用</option>
-            </select>
-          </Field>
         </div>
 
         {form.billingType === "term" && (

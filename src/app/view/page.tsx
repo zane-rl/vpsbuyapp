@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
-// 全局公开页已移除（避免一次性暴露所有客户数据）。
-// 裸访问 /view 重定向到登录；按客户分享请用 /view/<客户ID>。
+// 公开客户页已关闭，客户资料统一通过客户账号登录查看。
 export default function ViewIndex() {
-  redirect("/login");
+  redirect("/customer/login");
 }

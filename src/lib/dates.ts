@@ -97,6 +97,13 @@ export function addPeriod(date: Date | string, period: string | null | undefined
 
 export type Validity =
   | {
+      kind: "stopped";
+      label: string;
+      badgeClass: string;
+      dotClass: string;
+      textClass: string;
+    }
+  | {
       kind: "auto";
       label: string;
       badgeClass: string;
@@ -122,7 +129,17 @@ const AUTO_TEXT = "text-sky-600 dark:text-sky-400";
 export function vpsValidity(v: {
   billingType?: string | null;
   expiryDate: Date | string | null | undefined;
+  status?: string | null;
 }): Validity {
+  if (v.status === "stopped") {
+    return {
+      kind: "stopped",
+      label: "已下线",
+      badgeClass: "border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
+      dotClass: "bg-slate-400",
+      textClass: "text-slate-500 dark:text-slate-400",
+    };
+  }
   if (v.billingType === "auto" || !v.expiryDate) {
     return {
       kind: "auto",

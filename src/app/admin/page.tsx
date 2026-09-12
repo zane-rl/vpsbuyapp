@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { formatDate, vpsValidity } from "@/lib/dates";
 import { money } from "@/lib/money";
 import { estimateSharedBalance, type SharedBalanceEstimate } from "@/lib/billing";
+import { calculateCustomerSettlement } from "@/lib/customerSettlement";
 
 export const dynamic = "force-dynamic";
 
@@ -42,16 +43,8 @@ export default async function AdminDashboard() {
 
   // 按客户区分的财务统计
   const customerStats = customers.map((c) => {
-    const rechargeCostUsd = c.recharges.reduce((s, r) => s + r.amountUsd, 0);
-    const rechargePaidCny = c.recharges.reduce((s, r) => s + r.paidCny, 0);
-    const costUsd =
-      c.vpsServers.reduce((s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0), 0) +
-      rechargeCostUsd;
-    const paidCny =
-      c.vpsServers.reduce((s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0), 0) +
-      rechargePaidCny;
-    const receivedCny = c.payments.reduce((s, p) => s + p.amountCny, 0);
-    return { id: c.id, name: c.name, vpsCount: c.vpsServers.length, costUsd, paidCny, receivedCny, diffCny: receivedCny - paidCny };
+    const settlement = calculateCustomerSettlement(c);
+    return { id: c.id, name: c.name, vpsCount: c.vpsServers.length, costUsd: settlement.totalCostUsd, paidCny: settlement.totalPaidCny, receivedCny: settlement.totalReceivedCny, diffCny: settlement.diffCny };
   });
 
   // 按客户预计算共享余额/预估耗尽（auto VPS 共享同一耗尽日）

@@ -4,8 +4,9 @@
 
 ## 鉴权说明
 
-- **公开接口**：`/api/public/**` 无需登录。
 - **管理接口**：`/api/admin/**` 需携带登录后下发的 `vps_session` Cookie；未授权返回 `401 {"error":"未授权，请先登录"}`。
+- **客户接口**：`/api/customer/**` 需携带 `vps_customer_session`；客户归属只从会话读取，跨客户资源按不存在处理。
+- `/view/**` 不再提供公开数据；付款凭证也要求管理员或所属客户会话。
 - 浏览器内由同源 `fetch` 自动带 Cookie；命令行用 `curl -b cookie.txt`。
 
 ---
@@ -22,19 +23,28 @@
 ### DELETE `/api/auth/login` — 退出
 响应：`200 { "ok": true }`，清除 Cookie。
 
+### POST `/api/customer/auth/login` — 客户登录
+请求 `{ "username": "customer-a", "password": "..." }`。用户名大小写不敏感；成功下发独立客户 Cookie，并返回 `mustChangePassword`。账号停用或凭据错误统一返回 401。
+
+### PATCH `/api/customer/auth/password` — 客户修改密码
+请求 `{ "currentPassword": "...", "newPassword": "..." }`。新密码 8–128 字符；成功清除首次改密状态、递增会话版本并重新签发 Cookie。
+
+### DELETE `/api/customer/auth/login` — 客户退出
+清除客户 Cookie，不影响同一浏览器中的管理员会话。
+
 ---
 
-## 公开页
+## 客户门户与凭证
 
-无公开列表 API。客户专属页 `/view/<客户ID>`（服务端组件直接读库渲染，无需登录、只读该客户数据）。裸 `/view` 重定向到登录。**已删除** `GET /api/public/vps`（曾返回所有客户 VPS）。
+客户页面为 `/customer`、`/customer/users`、`/customer/vps/{id}`。旧 `/view` 和 `/view/{id}` 均跳转 `/customer/login`；`GET /api/public/vps` 保持删除。
 
-### GET `/api/files/{name}` — 读取上传的截图（公开）
-无需登录，按文件名（不可猜的随机串 + 图片扩展名）返回图片字节。`name` 不匹配 `^[a-zA-Z0-9]+\.(png|jpg|jpeg|webp|gif)$` 或文件不存在 → `404`。供后台与客户专属页 `<img>` 引用。
+### GET `/api/files/{name}` — 按归属读取上传截图
+管理员可读取任何仍被业务记录引用的凭证；客户只能读取自己 VPS、续费、充值或收款记录引用的凭证。未登录、跨客户、无业务引用、非法文件名或文件不存在均返回 404。
 
 ## 管理 — 上传
 
 ### POST `/api/admin/upload` — 上传付款截图
-鉴权保护。`multipart/form-data`，字段 `file`（图片）。仅允许 PNG/JPG/WEBP/GIF、≤5MB；保存到 `data/uploads/<随机串>.<ext>`。响应 `201 { "name": "<文件名>" }`；类型/大小不符 `400`。返回的 `name` 存入 VPS / 续费的 `paymentProof` 字段。
+鉴权保护。`multipart/form-data`，字段 `file`（图片）。仅允许 PNG/JPG/WEBP/GIF、≤5MB；保存到 `data/uploads/<随机串>.<ext>`。响应 `201 { "name": "<文件名>" }`；类型/大小不符 `400`。返回的 `name` 可存入 VPS、续费、充值或收款记录的 `paymentProof` 字段。
 
 ---
 
@@ -58,7 +68,6 @@
   "purchaseCostUsd": 6,
   "purchasePaidCny": 44,
   "paymentProof": "ab12cd34.png",
-  "status": "active",
   "notes": "搭建 SS"
 }
 ```
@@ -71,13 +80,16 @@
 **节点字段**：`subscribeUrl`（订阅链接，可选）。
 
 ### POST `/api/admin/vps/{id}/renew` — 续费（仅 term）
-对 `auto` 类型返回 `400`。自动续费余额改在客户页面充值（见「管理 — 客户充值」），单台 VPS 不再有余额/充值接口（原 `/api/admin/vps/{id}/balance` 已移除）。
+对 `auto` 类型返回 `400`，对已永久下线服务器返回 `409`。自动续费余额改在客户页面充值。
+
+### POST `/api/admin/vps/{id}/offline` — 永久下线
+将运行中 VPS 更新为 `status=stopped` 并写入 `stoppedAt`。重复调用返回 `409`；不提供恢复接口。下线保留历史财务和分配，但停止余额未来消耗与到期提醒。
 
 ### GET `/api/admin/vps/{id}` — 详情
 含 `renewals`（按续费时间倒序）与 `vpnNodes`（按创建时间正序）。不存在返回 `404`。
 
 ### PATCH `/api/admin/vps/{id}` — 编辑
-请求体同 POST，全量字段。返回 `200` 更新后对象。
+请求体同 POST，全量字段，不能通过此接口修改运行状态。若 VPS 节点仍有终端用户分配，改派客户返回 `409`。
 
 ### DELETE `/api/admin/vps/{id}` — 删除
 级联删除其续费记录与节点。返回 `200 { "ok": true }`。
@@ -94,11 +106,11 @@
   "renewDate": "2026-07-15",
   "costUsd": 6,
   "paidCny": 44,
-  "clientPaymentCny": 80,
+  "paymentProof": "ab12cd34.png",
   "notes": "月付续费"
 }
 ```
-行为：新增一条续费记录并把该 VPS 的 `expiryDate` 更新为 `newExpiry`（同一事务），状态置为 `active`。
+行为：新增一条续费记录并把该 VPS 的 `expiryDate` 更新为 `newExpiry`（同一事务）。永久下线后不能续费。
 - 校验：`newExpiry` 必须晚于当前到期时间，否则 `400`。
 - `renewDate` 省略时取当前时间。
 响应：`201` 续费记录对象。
@@ -148,7 +160,20 @@
 - `POST /api/admin/customers` — 新增 `{ name, note? }`，名称唯一
 - `GET /api/admin/customers/{id}` — 详情（含名下 VPS、收款记录、充值记录）
 - `PATCH /api/admin/customers/{id}` — 编辑 `{ name, note? }`
-- `DELETE /api/admin/customers/{id}` — 删除（收款级联删，名下 VPS customerId 置空）
+- `DELETE /api/admin/customers/{id}` — 删除（账号、终端用户、分配和台账级联删除，名下 VPS customerId 置空）
+
+### 客户登录账号
+
+- `POST /api/admin/customers/{id}/account` — 创建 `{ username, password }`；每客户最多一个，用户名全局唯一。
+- `PATCH /api/admin/customers/{id}/account` — 修改 `{ username?, enabled? }` 并使旧客户会话失效。
+- `POST /api/admin/customers/{id}/account/reset-password` — `{ password }`，重置后客户再次登录必须改密。
+
+### 终端用户与节点分配
+
+- 管理员：`POST /api/admin/customers/{customerId}/users`、`PATCH /api/admin/customer-users/{id}`。
+- 客户：`POST /api/customer/users`、`PATCH /api/customer/users/{id}`；客户归属固定取会话。
+- 分配：`POST .../users/{id}/nodes`，请求 `{ nodeId }`；解除：`DELETE .../users/{id}/nodes/{nodeId}`。管理员路径使用 `/api/admin/customer-users` 前缀，客户路径使用 `/api/customer/users`。
+- 新分配要求用户启用、节点启用且 VPS 运行中；重复分配返回 409。停用/禁用/下线不自动删除已有关系。
 
 ## 管理 — 收款记录
 
@@ -230,9 +255,9 @@
 
 **推送规则**（实现见 `src/lib/notify.ts`）：
 
-- 判定：`term` 用 `daysUntil(expiryDate) <= daysAhead`（已过期为负数，同样提醒）；`auto` 用 `estimateSharedBalance()` 的 `daysRemaining <= daysAhead`。同客户多台 auto 共享同一耗尽日，只算一次。
+- 判定：只处理运行中的服务器；`term` 用 `daysUntil(expiryDate) <= daysAhead`，`auto` 用 `estimateSharedBalance()` 的 `daysRemaining <= daysAhead`。
 - 收件人：**该客户专属收件人 + 全局收件人**，同一 chat_id 只发一次；该客户既无专属收件人也无全局收件人时跳过。
-- 消息文案：`您有服务器即将到期，详情查看{链接}，请确认并及时支付账单续费处理`。
+- 消息文案：`您有服务器即将到期，详情查看{链接}，请确认并及时支付账单续费处理`。客户专属收件人使用 `/customer`，全局收件人使用 `/admin/customers/{id}`；同 chat_id 重复时客户专属身份优先。
   以 `parse_mode=HTML` 发送，链接包在 `<a href="…">…</a>` 里并关掉了预览（`disable_web_page_preview`）。
   **不能发纯文本**：Telegram 的自动链接识别遇到中文全角逗号不截断，会把 URL 后面的「，请确认并及时…」一起吞进链接，客户点开打不开。文本里的 `& < >` 需转义（`buildMessage` 已处理）。
 - 按客户合并：一个客户一条消息，无论名下几台服务器到期。
@@ -247,4 +272,6 @@
 | 金额 | 非数字或负数归一为 `0` |
 | 端口 | 空或非法归一为 `null` |
 | 日期 | `YYYY-MM-DD` 按本地 00:00 解析；非法返回 `null`（必填项则报 400） |
-| status | 仅 `stopped` 识别为停用，其余归一为 `active` |
+| VPS 状态 | 新建固定为 `active`；只能通过永久下线接口改为 `stopped` |
+| 客户用户名 | NFKC 归一化后 3–64 字符，不含空白/控制字符，大小写不敏感且全局唯一 |
+| 客户密码 | 8–128 字符，scrypt + 随机盐存储 |

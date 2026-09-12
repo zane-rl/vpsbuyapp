@@ -21,7 +21,6 @@ export type VpsFormData = {
   purchaseCostUsd: string;
   purchasePaidCny: string;
   paymentProof: string;
-  status: string;
   notes: string;
 };
 
@@ -48,7 +47,6 @@ export function toFormData(v: any): VpsFormData {
     purchaseCostUsd: String(v.purchaseCostUsd ?? 0),
     purchasePaidCny: String(v.purchasePaidCny ?? 0),
     paymentProof: v.paymentProof ?? "",
-    status: v.status ?? "active",
     notes: v.notes ?? "",
   };
 }

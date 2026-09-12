@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { money } from "@/lib/money";
 import AddCustomer from "./AddCustomer";
-import CustomerLinkActions from "./CustomerLinkActions";
+import { calculateCustomerSettlement } from "@/lib/customerSettlement";
 
 export const dynamic = "force-dynamic";
 
@@ -17,24 +17,13 @@ export default async function CustomersPage() {
       },
       payments: { select: { amountCny: true } },
       recharges: { select: { amountUsd: true, paidCny: true } },
+      account: { select: { enabled: true } },
     },
   });
 
   const rows = customers.map((c) => {
-    const rechargeCostUsd = c.recharges.reduce((s, r) => s + r.amountUsd, 0);
-    const rechargePaidCny = c.recharges.reduce((s, r) => s + r.paidCny, 0);
-    const costUsd =
-      c.vpsServers.reduce(
-        (s, v) => s + v.purchaseCostUsd + v.renewals.reduce((rs, r) => rs + r.costUsd, 0),
-        0
-      ) + rechargeCostUsd;
-    const paid =
-      c.vpsServers.reduce(
-        (s, v) => s + v.purchasePaidCny + v.renewals.reduce((rs, r) => rs + r.paidCny, 0),
-        0
-      ) + rechargePaidCny;
-    const received = c.payments.reduce((s, p) => s + p.amountCny, 0);
-    return { ...c, vpsCount: c.vpsServers.length, costUsd, paid, received, diff: received - paid };
+    const settlement = calculateCustomerSettlement(c);
+    return { ...c, vpsCount: c.vpsServers.length, costUsd: settlement.totalCostUsd, paid: settlement.totalPaidCny, received: settlement.totalReceivedCny, diff: settlement.diffCny };
   });
 
   return (
@@ -58,6 +47,7 @@ export default async function CustomersPage() {
                 <tr className="table-head">
                   <th className="px-5 py-2.5">客户</th>
                   <th className="px-3 py-2.5 text-center">VPS</th>
+                  <th className="px-3 py-2.5 text-center">客户账号</th>
                   <th className="px-3 py-2.5 text-right">总成本 $</th>
                   <th className="px-3 py-2.5 text-right">实付成本 ¥</th>
                   <th className="px-3 py-2.5 text-right">收款 ¥</th>
@@ -73,6 +63,7 @@ export default async function CustomersPage() {
                       {c.note && <div className="text-xs text-slate-400 dark:text-slate-500">{c.note}</div>}
                     </td>
                     <td className="px-3 py-3 text-center text-slate-500">{c.vpsCount}</td>
+                    <td className="px-3 py-3 text-center"><span className={`badge ${c.account?.enabled ? "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400" : "border-slate-300 bg-slate-100 text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"}`}>{c.account?.enabled ? "已启用" : c.account ? "已停用" : "未创建"}</span></td>
                     <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">${money(c.costUsd)}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(c.paid)}</td>
                     <td className="px-3 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">¥{money(c.received)}</td>
@@ -81,7 +72,6 @@ export default async function CustomersPage() {
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex justify-end gap-3 text-sm">
-                        <CustomerLinkActions path={`/view/${c.id}`} />
                         <Link href={`/admin/customers/${c.id}`} className="font-medium text-indigo-600 transition hover:text-indigo-700 dark:text-indigo-400">
                           管理
                         </Link>
