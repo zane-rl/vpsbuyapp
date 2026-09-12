@@ -29,7 +29,7 @@ export async function middleware(req: NextRequest) {
       }
       return NextResponse.redirect(new URL("/customer/change-password", req.url));
     }
-    return NextResponse.next();
+    return customerNoStore(NextResponse.next());
   }
 
   const token = req.cookies.get(SESSION_COOKIE)?.value;
@@ -49,9 +49,16 @@ export async function middleware(req: NextRequest) {
 
 function customerUnauthorized(req: NextRequest) {
   if (req.nextUrl.pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "未授权，请先登录" }, { status: 401 });
+    return customerNoStore(NextResponse.json({ error: "未授权，请先登录" }, { status: 401 }));
   }
   const loginUrl = new URL("/customer/login", req.url);
   loginUrl.searchParams.set("from", req.nextUrl.pathname);
-  return NextResponse.redirect(loginUrl);
+  return customerNoStore(NextResponse.redirect(loginUrl));
+}
+
+function customerNoStore<T extends NextResponse>(response: T): T {
+  response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  response.headers.set("Pragma", "no-cache");
+  response.headers.set("Expires", "0");
+  return response;
 }

@@ -4,6 +4,7 @@ import ThemeToggle from "@/app/ThemeToggle";
 import { getCustomerPrincipal } from "@/lib/customerAuth";
 import { prisma } from "@/lib/db";
 import CustomerLogoutButton from "../CustomerLogoutButton";
+import CustomerSessionGuard from "../CustomerSessionGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default async function CustomerPortalLayout({ children }: { children: Rea
 
   return (
     <div className="app-bg min-h-screen">
+      <CustomerSessionGuard />
       <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/85 backdrop-blur-md dark:border-slate-800/70 dark:bg-slate-950/75">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-5">

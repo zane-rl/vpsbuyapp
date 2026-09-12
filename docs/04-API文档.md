@@ -30,7 +30,10 @@
 请求 `{ "currentPassword": "...", "newPassword": "..." }`。新密码 8–128 字符；成功清除首次改密状态、递增会话版本并重新签发 Cookie。
 
 ### DELETE `/api/customer/auth/login` — 客户退出
-清除客户 Cookie，不影响同一浏览器中的管理员会话。
+清除客户 Cookie，不影响同一浏览器中的管理员会话。响应带 `Cache-Control: no-store`；客户端成功后使用整页替换进入 `/customer/login`。
+
+### GET `/api/customer/auth/session` — 检查客户会话
+供客户门户在初次加载、浏览器历史回退或 BFCache 恢复时复核会话。有效返回 `200 { "ok": true }`；Cookie 缺失、账号停用、会话版本过期或尚需首次改密时返回 `401`。响应始终禁止缓存。
 
 ---
 

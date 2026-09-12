@@ -9,6 +9,12 @@ import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+};
+
 function isHttps(req: NextRequest): boolean {
   return req.nextUrl.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
 }
@@ -44,7 +50,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true }, { headers: NO_STORE_HEADERS });
   res.cookies.set(CUSTOMER_SESSION_COOKIE, "", {
     httpOnly: true,
     sameSite: "lax",

@@ -51,6 +51,7 @@ npx playwright install chromium           # 首次安装浏览器内核
 
 - `/` 重定向 `/admin`；`/view` 与 `/view/[customerId]` 均重定向 `/customer/login`。不得恢复任何免登录客户数据页。
 - `/customer`、`/customer/users` 与 `/customer/vps/[id]` 只允许访问会话所属客户数据。服务器和财务只读；客户仅可修改自己的密码、终端用户及节点分配。
+- 客户页面必须返回 `Cache-Control: no-store`。退出使用整页替换；`CustomerSessionGuard` 在初次加载、历史回退和 BFCache 恢复时调用 `/api/customer/auth/session` 复核会话，验证完成前不得展示缓存的客户数据。
 - `/api/cron/expiry-notify` 故意不纳入 middleware，自行校验 `X-Cron-Secret` 或 `?secret=` 与 `CRON_SECRET`，供服务器 crontab 每日调用。
 - `/api/files/[name]` 仅允许管理员或业务记录所属客户读取。必须同时保留业务归属反查和随机文件名正则校验；文件存放在 `data/uploads/`，而非 `public/`。
 

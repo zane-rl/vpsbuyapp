@@ -73,10 +73,27 @@ test.describe("客户门户与终端用户分配", () => {
     await expect(page.getByRole("heading", { name: vps.name })).toBeVisible();
     await expect(page.getByText("张三")).toBeVisible();
 
-    // 管理员会话与客户会话使用不同 Cookie，可以在下线后立即回到客户视角验证。
+    const sessionCheck = await page.request.get("/api/customer/auth/session");
+    expect(sessionCheck.ok()).toBeTruthy();
+    expect(sessionCheck.headers()["cache-control"]).toContain("no-store");
+
+    await page.getByRole("button", { name: "退出登录" }).click();
+    await page.waitForURL("**/customer/login");
+    expect((await page.request.get("/api/customer/auth/session")).status()).toBe(401);
+    await page.goBack();
+    await page.waitForURL("**/customer/login*");
+    await expect(page.getByRole("heading", { name: "客户登录" })).toBeVisible();
+
+    // 管理员与客户会话使用不同 Cookie；管理员下线后重新登录客户账号验证只读视角。
     await login(page);
     expect((await page.request.post(`/api/admin/vps/${vps.id}/offline`)).ok()).toBeTruthy();
     expect((await page.request.post(`/api/admin/vps/${vps.id}/renew`, { data: { newExpiry: "2027-01-01" } })).status()).toBe(409);
+
+    await page.goto("/customer/login");
+    await page.getByPlaceholder("客户用户名").fill(username);
+    await page.getByPlaceholder("登录密码").fill(finalPassword);
+    await page.getByRole("button", { name: "登录客户门户" }).click();
+    await page.waitForURL("**/customer");
     await page.goto(`/customer/vps/${vps.id}`);
     await expect(page.getByText("已下线", { exact: true })).toBeVisible();
     await expect(page.getByText("当前不可分配")).toBeVisible();
