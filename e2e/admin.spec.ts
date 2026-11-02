@@ -1,5 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
-import { login, uniqueName } from "./helpers";
+import { login, uniqueName, PNG_1X1 } from "./helpers";
 
 function ymd(offsetDays: number): string {
   // 用本地日期，匹配应用 parseDate/formatDate 的本地午夜约定，避免时区偏差
@@ -15,12 +15,6 @@ function ymd(offsetDays: number): string {
 async function autoAcceptDialogs(page: Page) {
   page.on("dialog", (dialog) => dialog.accept());
 }
-
-// 1x1 透明 PNG，用于测试上传
-const PNG_1x1 = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-  "base64"
-);
 
 test.describe("管理后台完整流程", () => {
   test("登录 → 财务汇总 → 新建 → 节点 → 续费 → 删续费 → 复制 → 删除", async ({ page }) => {
@@ -48,9 +42,9 @@ test.describe("管理后台完整流程", () => {
     await createForm.locator('input[type="file"]').setInputFiles({
       name: "proof.png",
       mimeType: "image/png",
-      buffer: PNG_1x1,
+      buffer: PNG_1X1,
     });
-    await expect(createForm.locator('img[alt="付款截图"]')).toBeVisible();
+    await expect.poll(() => createForm.locator('img[alt="付款截图"]').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     await page.getByRole("button", { name: "创建 VPS" }).click();
 
     // 跳转到详情页（排除 /admin/vps/new 自身）

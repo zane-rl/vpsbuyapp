@@ -3,9 +3,7 @@ import { unlink } from "fs/promises";
 import path from "path";
 import { formatDate } from "../src/lib/dates";
 import { money } from "../src/lib/money";
-import { login, uniqueName } from "./helpers";
-
-const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+import { login, uniqueName, PNG_1X1 } from "./helpers";
 
 async function customerContext(browser: Browser, baseURL: string | undefined, admin: APIRequestContext, customerId: string) {
   const username = uniqueName("expense-client");
@@ -60,8 +58,19 @@ test("其他费用录入、凭证隔离、各处结算一致及删除回退", as
     await form.getByLabel("费用成本 (USD)").fill("5");
     await form.getByLabel("费用实付 (CNY)").fill("35");
     await form.getByLabel("费用备注").fill("增加独立 IPv4 地址");
-    await form.locator('input[type="file"]').setInputFiles({ name: "expense.png", mimeType: "image/png", buffer: png });
-    await expect(form.locator('img[alt="付款截图"]')).toBeVisible();
+    const uploaded = page.waitForResponse((res) => res.url().endsWith("/api/admin/upload") && res.request().method() === "POST");
+    await form.locator('input[type="file"]').setInputFiles({ name: "expense.png", mimeType: "image/png", buffer: PNG_1X1 });
+    proof = (await (await uploaded).json()).name;
+    const preview = form.locator('img[alt="付款截图"]');
+    await expect.poll(() => preview.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    // 尚未关联业务记录的文件仍不可从凭证接口读取，但本地预览和点击查看应正常。
+    expect((await admin.get(`/api/files/${proof}`)).status()).toBe(404);
+    const popupReady = page.waitForEvent("popup");
+    await preview.locator("..").click();
+    const popup = await popupReady;
+    await expect(popup.locator("img")).toBeVisible();
+    await expect.poll(() => popup.locator("img").evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await popup.close();
     const created = page.waitForResponse((res) => res.url().endsWith(`/vps/${vps.id}/expenses`) && res.request().method() === "POST");
     await form.getByRole("button", { name: "保存费用" }).click();
     const createdRes = await created;
@@ -69,6 +78,7 @@ test("其他费用录入、凭证隔离、各处结算一致及删除回退", as
     const expense = await createdRes.json();
     proof = expense.paymentProof;
     await expect(section.getByRole("cell", { name: expenseType, exact: true })).toBeVisible();
+    await expect.poll(() => section.locator(`img[alt="${expenseType}付款截图"]`).evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     await expect(section.getByText("增加独立 IPv4 地址")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("vps-expenses-admin.png"), fullPage: true });
     const detail = await (await admin.get(`/api/admin/vps/${vps.id}`)).json();

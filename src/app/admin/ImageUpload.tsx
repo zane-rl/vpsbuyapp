@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function fileUrl(name: string): string {
   return `/api/files/${name}`;
@@ -18,6 +18,20 @@ export default function ImageUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [preview, setPreview] = useState<{ name: string; url: string } | null>(null);
+
+  // 新上传的图片还未关联业务记录，保存前使用本地预览，不读取受保护的凭证接口。
+  const previewUrl = preview?.name === value ? preview.url : fileUrl(value);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview.url);
+    };
+  }, [preview]);
+
+  useEffect(() => {
+    if (preview && preview.name !== value) setPreview(null);
+  }, [preview, value]);
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -30,6 +44,9 @@ export default function ImageUpload({
       const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
       if (res.ok) {
         const d = await res.json();
+        // 表单已关闭时不再创建预览，避免产生无法释放的本地 URL。
+        if (!inputRef.current) return;
+        setPreview({ name: d.name, url: URL.createObjectURL(file) });
         onChange(d.name);
       } else {
         const d = await res.json().catch(() => ({}));
@@ -48,9 +65,9 @@ export default function ImageUpload({
       <span className="label">{label}</span>
       <div className="flex items-center gap-3">
         {value ? (
-          <a href={fileUrl(value)} target="_blank" rel="noreferrer" className="shrink-0">
+          <a href={previewUrl} target="_blank" rel="noreferrer" className="shrink-0">
             <img
-              src={fileUrl(value)}
+              src={previewUrl}
               alt="付款截图"
               className="h-16 w-16 rounded-lg border border-slate-200 object-cover dark:border-slate-700"
             />

@@ -3,6 +3,12 @@ import { Page, expect } from "@playwright/test";
 // 与 .env.local 中的 ADMIN_PASSWORD 保持一致（可用环境变量覆盖）
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "md@123456";
 
+/** 有效的 1×1 PNG，用于同时验证截图上传和图片解码。 */
+export const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMISPnwHwAFUAKkukthWwAAAABJRU5ErkJggg==",
+  "base64"
+);
+
 /** 通过登录页完成登录，结束后停留在 /admin */
 export async function login(page: Page) {
   await page.goto("/login");
