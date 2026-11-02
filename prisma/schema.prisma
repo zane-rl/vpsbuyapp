@@ -137,6 +137,7 @@ model VpsServer {
   notes     String?
 
   renewals    VpsRenewal[]
+  expenses    VpsExpense[]
   vpnNodes    VpnNode[]
   balanceLogs VpsBalanceLog[]
 
@@ -184,6 +185,22 @@ model VpsRenewal {
   createdAt DateTime @default(now())
 
   @@index([vpsId])
+}
+
+/// VPS 其他费用：独立于续费，只影响财务，不变更有效期或共享余额
+model VpsExpense {
+  id           String    @id @default(cuid())
+  vps          VpsServer @relation(fields: [vpsId], references: [id], onDelete: Cascade)
+  vpsId        String
+  expenseType  String // 费用类型，如额外 IP、流量、维护
+  expenseDate  DateTime // 费用发生时间
+  costUsd      Float     @default(0)
+  paidCny      Float     @default(0)
+  paymentProof String?
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  @@index([vpsId, expenseDate])
 }
 
 /// VPN 节点（归属对应 VPS）

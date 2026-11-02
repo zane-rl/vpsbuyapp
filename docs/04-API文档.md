@@ -89,13 +89,13 @@
 将运行中 VPS 更新为 `status=stopped` 并写入 `stoppedAt`。重复调用返回 `409`；不提供恢复接口。下线保留历史财务和分配，但停止余额未来消耗与到期提醒。
 
 ### GET `/api/admin/vps/{id}` — 详情
-含 `renewals`（按续费时间倒序）与 `vpnNodes`（按创建时间正序）。不存在返回 `404`。
+含 `renewals`（按续费时间倒序）、`expenses`（按费用时间倒序）与 `vpnNodes`（按创建时间正序）。不存在返回 `404`。
 
 ### PATCH `/api/admin/vps/{id}` — 编辑
 请求体同 POST，全量字段，不能通过此接口修改运行状态。若 VPS 节点仍有终端用户分配，改派客户返回 `409`。
 
 ### DELETE `/api/admin/vps/{id}` — 删除
-级联删除其续费记录与节点。返回 `200 { "ok": true }`。
+级联删除其续费记录、其他费用与节点。返回 `200 { "ok": true }`。
 
 ---
 
@@ -120,6 +120,31 @@
 
 ### DELETE `/api/admin/renewals/{id}` — 删除续费记录
 仅删除该历史记录，**不改动所属 VPS 的当前到期时间**（如需调整请用 PATCH `/api/admin/vps/{id}` 修改 `expiryDate`）。返回 `200 { "ok": true }`，不存在返回 `404`。
+
+---
+
+## 管理 — VPS 其他费用
+
+### POST `/api/admin/vps/{id}/expenses` — 新增费用
+
+仅管理员可调用；`term`、`auto` 和已下线 VPS 均可记账。请求体：
+
+```json
+{
+  "expenseType": "额外 IP",
+  "expenseDate": "2026-11-02",
+  "costUsd": 5,
+  "paidCny": 35,
+  "paymentProof": "ab12cd34.png",
+  "notes": "增加独立 IPv4 地址"
+}
+```
+
+`expenseType` 和 `expenseDate` 必填；金额可省略取 0，必须为非负数。类型为空、日期无效或金额非法返回 `400`，VPS 不存在返回 `404`，成功返回 `201` 费用对象。费用只影响成本、实付、差额及付款明细，不修改到期时间、运行状态或共享余额。
+
+### DELETE `/api/admin/expenses/{id}` — 删除费用
+
+仅管理员可调用；删除后汇总和付款明细同步撤销该笔金额。成功返回 `200 { "ok": true }`，记录不存在返回 `404`。凭证通过所属 VPS 反查客户归属，仅管理员或该客户可读取，删除费用后未被其他业务记录关联的凭证不可读取。
 
 ---
 

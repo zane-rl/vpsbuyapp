@@ -8,7 +8,7 @@ import { calculateCustomerSettlement } from "@/lib/customerSettlement";
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const [list, vpsAgg, renewAgg, payAgg, rechargeAgg, customers, notifySetting] = await Promise.all([
+  const [list, vpsAgg, renewAgg, expenseAgg, payAgg, rechargeAgg, customers, notifySetting] = await Promise.all([
     prisma.vpsServer.findMany({
       orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       include: {
@@ -19,12 +19,16 @@ export default async function AdminDashboard() {
     }),
     prisma.vpsServer.aggregate({ _sum: { purchaseCostUsd: true, purchasePaidCny: true } }),
     prisma.vpsRenewal.aggregate({ _sum: { costUsd: true, paidCny: true } }),
+    prisma.vpsExpense.aggregate({ _sum: { costUsd: true, paidCny: true } }),
     prisma.customerPayment.aggregate({ _sum: { amountCny: true } }),
     prisma.customerRecharge.aggregate({ _sum: { amountUsd: true, paidCny: true } }),
     prisma.customer.findMany({
       orderBy: { name: "asc" },
       include: {
-        vpsServers: { include: { renewals: { select: { costUsd: true, paidCny: true } } } },
+        vpsServers: { include: {
+          renewals: { select: { costUsd: true, paidCny: true } },
+          expenses: { select: { costUsd: true, paidCny: true } },
+        } },
         payments: { select: { amountCny: true } },
         recharges: { select: { amountUsd: true, paidCny: true, balanceAfter: true, rechargeDate: true } },
       },
@@ -36,8 +40,8 @@ export default async function AdminDashboard() {
   const notifyReady =
     notifySetting?.enabled === true && !!notifySetting.botToken && !!notifySetting.siteBaseUrl;
 
-  const totalCostUsd = (vpsAgg._sum.purchaseCostUsd ?? 0) + (renewAgg._sum.costUsd ?? 0) + (rechargeAgg._sum.amountUsd ?? 0);
-  const totalPaidCny = (vpsAgg._sum.purchasePaidCny ?? 0) + (renewAgg._sum.paidCny ?? 0) + (rechargeAgg._sum.paidCny ?? 0);
+  const totalCostUsd = (vpsAgg._sum.purchaseCostUsd ?? 0) + (renewAgg._sum.costUsd ?? 0) + (expenseAgg._sum.costUsd ?? 0) + (rechargeAgg._sum.amountUsd ?? 0);
+  const totalPaidCny = (vpsAgg._sum.purchasePaidCny ?? 0) + (renewAgg._sum.paidCny ?? 0) + (expenseAgg._sum.paidCny ?? 0) + (rechargeAgg._sum.paidCny ?? 0);
   const totalReceivedCny = payAgg._sum.amountCny ?? 0;
   const diffCny = totalReceivedCny - totalPaidCny;
 

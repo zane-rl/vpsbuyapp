@@ -3,6 +3,7 @@ export type SettlementSource = {
     purchaseCostUsd: number;
     purchasePaidCny: number;
     renewals: { costUsd: number; paidCny: number }[];
+    expenses: { costUsd: number; paidCny: number }[];
   }[];
   recharges: { amountUsd: number; paidCny: number }[];
   payments: { amountCny: number }[];
@@ -13,11 +14,15 @@ export function calculateCustomerSettlement(source: SettlementSource) {
   const rechargeCostUsd = source.recharges.reduce((sum, recharge) => sum + recharge.amountUsd, 0);
   const rechargePaidCny = source.recharges.reduce((sum, recharge) => sum + recharge.paidCny, 0);
   const totalCostUsd = source.vpsServers.reduce(
-    (sum, vps) => sum + vps.purchaseCostUsd + vps.renewals.reduce((renewalSum, renewal) => renewalSum + renewal.costUsd, 0),
+    (sum, vps) => sum + vps.purchaseCostUsd
+      + vps.renewals.reduce((renewalSum, renewal) => renewalSum + renewal.costUsd, 0)
+      + vps.expenses.reduce((expenseSum, expense) => expenseSum + expense.costUsd, 0),
     rechargeCostUsd
   );
   const totalPaidCny = source.vpsServers.reduce(
-    (sum, vps) => sum + vps.purchasePaidCny + vps.renewals.reduce((renewalSum, renewal) => renewalSum + renewal.paidCny, 0),
+    (sum, vps) => sum + vps.purchasePaidCny
+      + vps.renewals.reduce((renewalSum, renewal) => renewalSum + renewal.paidCny, 0)
+      + vps.expenses.reduce((expenseSum, expense) => expenseSum + expense.paidCny, 0),
     rechargePaidCny
   );
   const totalReceivedCny = source.payments.reduce((sum, payment) => sum + payment.amountCny, 0);

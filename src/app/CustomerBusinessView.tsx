@@ -8,6 +8,7 @@ import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import ProofThumb from "@/app/ProofThumb";
 import CopyButton from "@/app/CopyButton";
 import { calculateCustomerSettlement } from "@/lib/customerSettlement";
+import { sortCustomerVps } from "@/lib/customerVps";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
           provider: true,
           vpnNodes: { where: { enabled: true }, orderBy: { createdAt: "asc" } },
           renewals: { orderBy: { renewDate: "desc" } },
+          expenses: { orderBy: { expenseDate: "desc" } },
         },
         orderBy: { expiryDate: { sort: "asc", nulls: "last" } },
       },
@@ -35,9 +37,10 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
   const hasAuto = list.some((v) => v.billingType === "auto");
   const balanceEst = estimateSharedBalance({ recharges: customer.recharges, vpsServers: list, now: new Date() });
   const sharedBalanceUsd = balanceEst.balanceUsd;
+  const sortedVps = sortCustomerVps(list, balanceEst);
   const { totalCostUsd, totalPaidCny, totalReceivedCny, diffCny } = calculateCustomerSettlement(customer);
 
-  // 付款记录：各台 VPS 的购买 + 每次续费 + 客户充值，汇总成一张台账，按日期倒序。
+  // 付款记录：各台 VPS 的购买、续费、其他费用与客户充值，按日期倒序。
   // 与顶部「总实际付款」同口径，便于和右侧收款记录逐笔对照。
   type PayRow = {
     key: string;
@@ -71,6 +74,18 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
         paidCny: r.paidCny,
         proof: r.paymentProof,
         note: r.notes ? r.notes : `续至 ${formatDate(r.newExpiry)}`,
+      });
+    }
+    for (const expense of v.expenses) {
+      payRows.push({
+        key: `e-${expense.id}`,
+        date: expense.expenseDate,
+        target: `${v.name} · ${expense.expenseType}`,
+        kind: "其他费用",
+        costUsd: expense.costUsd,
+        paidCny: expense.paidCny,
+        proof: expense.paymentProof,
+        note: expense.notes,
       });
     }
   }
@@ -152,10 +167,10 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
         {/* 付款记录 与 收款记录：左右并排，方便逐笔对照 */}
         <section className="mb-6 grid gap-4 lg:grid-cols-2">
           {/* 付款记录（支出）*/}
-          <div className="card p-5">
+          <div className="card min-w-0 p-5">
             <div className="mb-3 flex items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">付款记录</h2>
-              <span className="text-xs text-slate-400 dark:text-slate-500">服务器购买 · 续费 · 余额充值</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">购买 · 续费 · 其他费用 · 充值</span>
             </div>
             {payRows.length === 0 ? (
               <p className="py-6 text-center text-sm text-slate-400 dark:text-slate-500">暂无付款记录</p>
@@ -217,7 +232,7 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
           </div>
 
           {/* 收款记录（客户已付给我方）*/}
-          <div className="card p-5">
+          <div className="card min-w-0 p-5">
             <div className="mb-3 flex items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">收款记录</h2>
               <span className="text-xs text-slate-400 dark:text-slate-500">您已支付的款项</span>
@@ -276,21 +291,25 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
           <div className="card border-dashed p-16 text-center text-slate-400">该客户暂无 VPS 记录</div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
-            {list.map((vps) => {
+            {sortedVps.map((vps) => {
               const va = vpsValidity(vps);
               const isAuto = vps.billingType === "auto";
               const specs = [vps.cpu, vps.ram, vps.disk].filter(Boolean).join(" · ");
               const renewPaidCny = vps.renewals.reduce((s, r) => s + r.paidCny, 0);
+              const expensePaidCny = vps.expenses.reduce((sum, expense) => sum + expense.paidCny, 0);
               return (
                 <article key={vps.id} className="card card-hover animate-fade-in p-5">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2.5">
+                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
                       <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${va.dotClass}`} />
-                      <div>
-                        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{vps.name}</h2>
+                      <div className="min-w-0">
+                        <h2 className="break-words text-lg font-semibold text-slate-900 dark:text-slate-100">{vps.name}</h2>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
                           {vps.provider?.name ?? "未指定"}
                           {vps.region ? ` · ${vps.region}` : ""}
+                        </p>
+                        <p className="mt-1 break-all font-mono text-xs text-slate-500 dark:text-slate-400">
+                          IP：{vps.ipAddress || "未填写"}
                         </p>
                       </div>
                     </div>
@@ -332,9 +351,10 @@ export async function CustomerBusinessView({ customerId }: { customerId: string 
                     <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/50">
                       <dt className="text-xs text-slate-400 dark:text-slate-500">
                         实际付款{vps.renewals.length > 0 ? `（含 ${vps.renewals.length} 次续费）` : ""}
+                        {vps.expenses.length > 0 ? `（含 ${vps.expenses.length} 笔其他费用）` : ""}
                       </dt>
                       <dd className="font-medium text-slate-700 dark:text-slate-200">
-                        ¥{money(vps.purchasePaidCny + renewPaidCny)}
+                        ¥{money(vps.purchasePaidCny + renewPaidCny + expensePaidCny)}
                       </dd>
                     </div>
                   </dl>

@@ -11,6 +11,7 @@ import { cycleLabel, money } from "@/lib/money";
 import { estimateSharedBalance } from "@/lib/billing";
 import BalanceEstimateLine from "@/app/BalanceEstimateLine";
 import OfflineButton from "./OfflineButton";
+import VpsExpenseSection from "@/app/VpsExpenseSection";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
           },
         },
         renewals: { orderBy: { renewDate: "desc" } },
+        expenses: { orderBy: { expenseDate: "desc" } },
         vpnNodes: { orderBy: { createdAt: "asc" } },
       },
     }),
@@ -146,6 +148,8 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
       </section>
       )}
 
+      <VpsExpenseSection vpsId={vps.id} expenses={vps.expenses} editable />
+
       {vps.status === "active" ? (
         <section className="card border-red-200 p-6 dark:border-red-900/60">
           <h2 className="text-sm font-semibold text-red-700 dark:text-red-400">服务器下线</h2>
@@ -153,7 +157,7 @@ export default async function VpsDetailPage({ params }: { params: { id: string }
           <OfflineButton vpsId={vps.id} vpsName={vps.name} />
         </section>
       ) : (
-        <section className="card p-5 text-sm text-slate-500 dark:text-slate-400">该服务器已于 {formatDate(vps.stoppedAt)} 永久下线，历史资料仅供查阅。</section>
+        <section className="card p-5 text-sm text-slate-500 dark:text-slate-400">该服务器已于 {formatDate(vps.stoppedAt)} 永久下线，历史资产与费用记录继续保留。</section>
       )}
 
       {/* VPN 节点 */}

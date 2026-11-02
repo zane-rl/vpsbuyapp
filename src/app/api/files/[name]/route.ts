@@ -31,16 +31,20 @@ export async function GET(req: NextRequest, { params }: { params: { name: string
 
   const customerId = customer?.customerId;
   const ownerFilter = customerId ? { customerId } : {};
-  const [vps, renewal, payment, recharge] = await Promise.all([
+  const [vps, renewal, expense, payment, recharge] = await Promise.all([
     prisma.vpsServer.findFirst({ where: { paymentProof: name, ...ownerFilter }, select: { id: true } }),
     prisma.vpsRenewal.findFirst({
+      where: { paymentProof: name, ...(customerId ? { vps: { customerId } } : {}) },
+      select: { id: true },
+    }),
+    prisma.vpsExpense.findFirst({
       where: { paymentProof: name, ...(customerId ? { vps: { customerId } } : {}) },
       select: { id: true },
     }),
     prisma.customerPayment.findFirst({ where: { paymentProof: name, ...ownerFilter }, select: { id: true } }),
     prisma.customerRecharge.findFirst({ where: { paymentProof: name, ...ownerFilter }, select: { id: true } }),
   ]);
-  if (!vps && !renewal && !payment && !recharge) return new Response("Not found", { status: 404 });
+  if (!vps && !renewal && !expense && !payment && !recharge) return new Response("Not found", { status: 404 });
 
   try {
     const buf = await readFile(path.join(UPLOAD_DIR, name));

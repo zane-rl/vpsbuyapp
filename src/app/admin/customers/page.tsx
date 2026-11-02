@@ -13,6 +13,7 @@ export default async function CustomersPage() {
       vpsServers: {
         include: {
           renewals: { select: { costUsd: true, paidCny: true } },
+          expenses: { select: { costUsd: true, paidCny: true } },
         },
       },
       payments: { select: { amountCny: true } },

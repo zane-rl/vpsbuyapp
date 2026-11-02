@@ -9,6 +9,7 @@ import { formatDate, vpsValidity } from "@/lib/dates";
 import { prisma } from "@/lib/db";
 import { cycleLabel, money } from "@/lib/money";
 import ServerNodeAssignments from "./ServerNodeAssignments";
+import VpsExpenseSection from "@/app/VpsExpenseSection";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function CustomerVpsPage({ params }: { params: { id: string
     include: {
       provider: true,
       renewals: { orderBy: { renewDate: "desc" } },
+      expenses: { orderBy: { expenseDate: "desc" } },
       vpnNodes: { where: { OR: [{ enabled: true }, { assignments: { some: {} } }] }, orderBy: { createdAt: "asc" }, include: { assignments: { include: { managedUser: { select: { id: true, name: true, enabled: true } } } } } },
       customer: { include: { recharges: true, vpsServers: { select: { billingType: true, autoCycle: true, cyclePriceUsd: true, purchaseDate: true, status: true, stoppedAt: true } }, managedUsers: { orderBy: { name: "asc" }, select: { id: true, name: true, enabled: true } } } },
     },
@@ -55,6 +57,7 @@ export default async function CustomerVpsPage({ params }: { params: { id: string
       </section>
 
       {!isAuto && <section className="card p-5"><h2 className="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-200">续费记录</h2>{vps.renewals.length === 0 ? <p className="text-sm text-slate-400">暂无续费记录</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="table-head"><th className="py-2">续费时间</th><th>到期变更</th><th className="text-right">成本 $</th><th className="text-right">实付 ¥</th><th>凭证</th></tr></thead><tbody>{vps.renewals.map((r) => <tr key={r.id} className="table-row"><td className="py-2.5">{formatDate(r.renewDate)}</td><td>{formatDate(r.previousExpiry)} → {formatDate(r.newExpiry)}</td><td className="text-right">${money(r.costUsd)}</td><td className="text-right">¥{money(r.paidCny)}</td><td><ProofThumb proof={r.paymentProof} alt="续费凭证" /></td></tr>)}</tbody></table></div>}</section>}
+      <VpsExpenseSection vpsId={vps.id} expenses={vps.expenses} />
     </div>
   );
 }

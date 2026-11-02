@@ -62,7 +62,7 @@ npx playwright install chromium           # 首次安装浏览器内核
 - **自动续费 `auto`**：没有到期时间，依赖客户级共享余额；`autoCycle` 和 `cyclePriceUsd` 仅用于估算。统一通过 `src/lib/billing.ts` 的 `parseBilling()` 解析，两类字段必须互斥置 `null`。
 - **永久下线**：只能通过专用接口把 VPS 置为 `stopped` 并写入 `stoppedAt`，不提供恢复。下线服务器不能续费，也不再进入到期通知或未来日均消耗。
 - **共享余额是估算值**：`estimateSharedBalance()` 以最近充值的 `balanceAfter` 为基准。运行中 auto VPS 消耗到当前时间；下线 auto VPS 只计算到 `stoppedAt`，不退回历史消耗。同一客户的运行中 auto VPS 共享耗尽日。展示必须带“估算”，统一使用 `src/app/BalanceEstimateLine.tsx`。
-- **财务口径必须三处一致**：后台概览、客户详情和客户门户都按以下公式计算：总成本 USD = VPS 采购成本 + 续费成本 + 充值 `amountUsd`；总实付 CNY = VPS 实付 + 续费实付 + 充值 `paidCny`；总收款 CNY = `CustomerPayment.amountCny` 之和；差额 = 总收款 − 总实付，正值绿色、负值红色。
+- **财务口径必须一致**：后台概览、客户列表、客户详情和客户门户都按以下公式计算：总成本 USD = VPS 采购成本 + 续费成本 + 其他费用 `costUsd` + 充值 `amountUsd`；总实付 CNY = VPS 实付 + 续费实付 + 其他费用 `paidCny` + 充值 `paidCny`；总收款 CNY = `CustomerPayment.amountCny` 之和；差额 = 总收款 − 总实付，正值绿色、负值红色。`VpsExpense` 归属 VPS，支持管理员补录与删除（含下线服务器）；不变更有效期或共享余额，客户只读，凭证需按所属 VPS 的客户归属鉴权。
 - **账号与终端用户分离**：`CustomerAccount` 是每客户最多一个的登录身份；`CustomerManagedUser` 是客户自行维护、不能登录的 VPN 使用者。节点分配统一通过 `VpnNodeAssignment`，跨客户资源按不存在处理。
 - **弃用模型**：`VpsBalanceLog` 和 `VpsServer.balanceAmount` 仅为避免重建线上表而保留，应用层不得再引用。
 

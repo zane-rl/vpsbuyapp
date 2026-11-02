@@ -13,6 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       provider: true,
       customer: true,
       renewals: { orderBy: { renewDate: "desc" } },
+      expenses: { orderBy: { expenseDate: "desc" } },
       vpnNodes: { orderBy: { createdAt: "asc" } },
     },
   });
