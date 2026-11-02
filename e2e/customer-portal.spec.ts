@@ -129,6 +129,10 @@ test.describe("客户门户与终端用户分配", () => {
     await expect(page.getByRole("heading", { name: "VPS 服务清单" })).toBeVisible();
     await expect(page.getByText("总实际付款")).toBeVisible();
     await expect(page.getByText("收款记录")).toBeVisible();
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    await page.getByRole("button", { name: "复制订阅", exact: true }).click();
+    await expect(page.getByRole("button", { name: "已复制 ✓", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("https://example.com/e2e-sub");
 
     // 客户令牌即使被手工复制到管理员 Cookie，也不能通过管理员鉴权。
     const customerCookie = (await page.context().cookies()).find((cookie) => cookie.name === "vps_customer_session");
